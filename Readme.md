@@ -1,8 +1,7 @@
 # 📊 S&P 100 Aktien-Dashboard
 
 Interaktives Streamlit-Dashboard zur Analyse der 100 größten US-Aktien (S&P 100).
-Zeigt Kursverläufe mit technischen Indikatoren, Fundamentaldaten, Bewertungs­kennzahlen
-sowie mehrere quantitative Backtest-Strategien.
+Zeigt Kursverläufe mit technischen Indikatoren, Fundamentaldaten und Bewertungs­kennzahlen.
 
 Daten kommen aus **yfinance** (Kurse) und **SimFin** (Fundamentaldaten) und werden
 lokal in einer **SQLite-Datenbank** zwischengespeichert.
@@ -18,7 +17,6 @@ lokal in einer **SQLite-Datenbank** zwischengespeichert.
 - **Benchmark-Vergleich**: gegen S&P 500 (SPY), Nasdaq 100 (QQQ), Dow Jones (DIA)
 - **Lokaler DB-Cache**: Daten müssen nur einmal geladen werden, danach blitzschnell
 - **Robuste Datenladung**: automatischer Fallback yfinance ↔ SimFin, Schutz vor Rate-Limits
-- **Backtest-Tools**: mehrere eigenständige Strategie-Backtests (KGV, KBV, EV/EBITDA, FCF-Yield, Piotroski, Mean-Reversion)
 
 ---
 
@@ -53,7 +51,7 @@ pip install streamlit pandas numpy plotly simfin yfinance
 ### 3. Dashboard starten
 
 ```bash
-streamlit run Dashboard_SP100_ohneDCF.py
+streamlit run Dashboard.py
 ```
 
 Im Browser öffnet sich automatisch die App unter `http://localhost:8501`.
@@ -66,18 +64,9 @@ Im Browser öffnet sich automatisch die App unter `http://localhost:8501`.
 
 ```
 .
-├── Dashboard_SP100_ohneDCF.py   # Haupt-Dashboard (100 Aktien, ohne DCF-Tab)
-├── Dashboard_SP100.py           # Haupt-Dashboard inkl. DCF-Bewertungsrechner
-├── Dashboard_Aktien.py          # Kompakte Variante mit 20 ausgewählten Aktien
+├── Dashboard.py   # Haupt-Dashboard (100 Aktien, ohne DCF-Tab)
 ├── database.py                  # Daten-Layer (yfinance/SimFin → SQLite)
 ├── market_data.db               # SQLite-Datenbank (entsteht automatisch beim ersten Start)
-│
-├── Backtest_KBV_SP100.py        # Mean-Reversion auf Kurs-Buchwert-Verhältnis
-├── Backtest_EVEBITDA_SP100.py   # Mean-Reversion auf EV/EBITDA
-├── Backtest_FCFYield_SP100.py   # Free-Cashflow-Yield-Strategie
-├── Backtest_Piotroski_SP100.py  # Piotroski F-Score + EV/EBITDA (Quality+Value)
-├── Backtest_DCF_SP100.py        # DCF-Fair-Value-Backtest
-├── Backtest_MeanReversion_2010.py  # Wöchentliche Preis-Mean-Reversion seit 2010
 │
 ├── upgrade_to_yfinance.py       # Hilfsskript: lädt SimFin-Aktien gedrosselt
 │                                  auf längere yfinance-Historie um
@@ -97,7 +86,7 @@ Das Projekt folgt einer klaren **Drei-Schichten-Architektur**:
                   ▼
             market_data.db          (SQLite — lokaler Zwischenspeicher)
                   ▼
-       Dashboard_SP100*.py          (Streamlit-Oberfläche, nur Anzeige)
+       Dashboard.py          (Streamlit-Oberfläche, nur Anzeige)
                   ▼
               Browser
 ```
