@@ -38,7 +38,7 @@ lokal in einer **SQLite-Datenbank** zwischengespeichert.
 ### 1. Repository klonen
 
 ```bash
-git clone https://github.com/<dein-username>/<dein-repo-name>.git
+git clone https://github.com/<joglog>/<Dashboard>.git
 cd <dein-repo-name>
 ```
 
