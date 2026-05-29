@@ -104,3 +104,106 @@ Das Projekt folgt einer klaren **Drei-Schichten-Architektur**:
 - Bei "Too Many Requests" automatischer Fallback auf SimFin
 - Bei Erfolg über SimFin wird beim nächsten Mal erneut yfinance versucht (für längere Historie)
 
+---
+
+## 🔌 Datenlayer (`database.py`)
+
+Der Datenlayer ist die zentrale Schnittstelle zwischen den externen Datenquellen
+und der lokalen Datenbank. Das Dashboard kommuniziert ausschließlich mit dieser Schicht
+und weiß nichts davon, woher die Daten ursprünglich kommen.
+
+**Hauptaufgaben:**
+- **Daten beschaffen**: Kurse von yfinance, Fundamentaldaten von SimFin
+- **Daten putzen**: Spaltennamen vereinheitlichen, Datumsformate normalisieren, fehlende Werte behandeln
+- **Daten speichern**: alles in die SQLite-Datenbank schreiben
+- **Daten ausliefern**: auf Anfrage des Dashboards die passenden Zeitreihen aus der DB lesen
+
+**Wichtige Funktionen:**
+
+| Funktion | Zweck |
+|---|---|
+| `DB()` | Initialisiert die Datenbank-Verbindung und legt bei Bedarf die Tabellen an |
+| `get_prices(ticker)` | Liefert Kurse einer Aktie — automatisch nachgeladen bei Bedarf |
+| `get_fundamentals(ticker)` | Liefert Income/Balance/Cashflow-Daten |
+| `refresh_prices(ticker)` | Erzwingt manuelles Nachladen der Kurse |
+| `refresh_fundamentals(ticker)` | Erzwingt Nachladen der Fundamentaldaten |
+| `get_status()` | Liefert eine Übersicht, wann welche Aktie zuletzt aktualisiert wurde |
+
+**TTL-Logik (Time-To-Live):**
+Bei jeder Abfrage prüft der Datenlayer, ob die gespeicherten Daten noch "frisch" sind.
+Kurse gelten einen Tag als aktuell, Fundamentaldaten eine Woche (da Quartalsberichte
+nur viermal im Jahr erscheinen). Veraltete Daten werden automatisch aus dem Internet
+nachgeladen — der Nutzer merkt davon nichts außer einer kurzen Wartezeit.
+
+---
+
+## 🗄️ Datenbank (`market_data.db`)
+
+Die Datenbank ist eine einzelne SQLite-Datei im Projektordner. Sie wird beim ersten
+Start automatisch erzeugt — manuelles Anlegen ist nicht nötig.
+
+**Vorteile von SQLite für dieses Projekt:**
+- **Kein Server nötig**: alles in einer einzigen Datei, leicht zu kopieren und sichern
+- **Schnell** auch bei mehreren Millionen Zeilen
+- **Inspizierbar**: kann mit Tools wie [DB Browser for SQLite](https://sqlitebrowser.org/) geöffnet und durchsucht werden
+- **Plattformunabhängig**: gleiche Datei funktioniert unter Windows, Mac und Linux
+
+**Tabellen-Übersicht:**
+
+| Tabelle | Inhalt | Frequenz |
+|---|---|---|
+| `prices` | Open, High, Low, Close, Volume pro Aktie und Tag | täglich |
+| `income` | Gewinn-und-Verlust-Rechnung (Umsatz, Kosten, Net Income, EPS, …) | quartalsweise |
+| `balance` | Bilanz (Aktiva, Passiva, Eigenkapital, Schulden) | quartalsweise |
+| `cashflow` | Kapitalflussrechnung (operativer Cashflow, Investitionen, …) | quartalsweise |
+| `metrics_ttm` | vorberechnete Trailing-Twelve-Months-Kennzahlen | abgeleitet |
+| `update_log` | Protokoll aller Lade-Vorgänge inkl. Quelle und Zeitstempel | bei jedem Update |
+
+**Indizes:**
+Auf den häufig abgefragten Spalten (`ticker`, `date`) sind Indizes angelegt, damit
+Abfragen wie "alle Kurse von Apple" in Millisekunden zurückkommen, statt die ganze
+Tabelle zu durchsuchen.
+
+**Größe der Datenbank:**
+Bei 100 Aktien mit voller Historie und allen Fundamentaldaten typischerweise zwischen
+30 und 100 MB — klein genug, um sie problemlos auf einem USB-Stick oder per E-Mail
+zu teilen.
+
+---
+
+## 🖥️ Dashboard (`Dashboard.py`)
+
+Das Dashboard ist die Benutzeroberfläche, die im Browser läuft. Es wird mit
+[Streamlit](https://streamlit.io) gebaut — einem Framework, das aus reinem Python-Code
+eine interaktive Web-App erzeugt, ohne dass HTML oder JavaScript geschrieben werden
+muss.
+
+**Aufbau in vier Tabs:**
+
+| Tab | Inhalt |
+|---|---|
+| 📈 **Chart** | Candlestick-Kurschart mit zuschaltbaren Indikatoren (SMA 20/50/100/200, RSI, MACD, Volumen) plus Performance-Kennzahlen (Kurs, Return, CAGR, Volatilität, Alpha, Beta) |
+| 📊 **Fundamentals** | Quartalsweise Darstellung von Umsatz, Gewinn, EPS und Nettomarge als gestapelte Diagramme |
+| 💎 **Bewertung** | Historische Zeitreihen von KGV (Kurs-Gewinn-Verhältnis) und KBV (Kurs-Buchwert-Verhältnis) inkl. Durchschnittslinien |
+| 🗄️ **DB** | Datenbank-Status, manuelles Nachladen einzelner oder aller Aktien |
+
+**Sidebar-Steuerung:**
+Links lassen sich Aktie, Zeitraum, technische Indikatoren, Benchmark und eine
+optionale Vergleichsaktie auswählen. Jede Änderung führt sofort zu einem Neu-Rendern
+der gesamten App.
+
+**Wie Streamlit funktioniert:**
+Streamlit führt das Skript bei jeder Benutzer-Interaktion **komplett von oben nach
+unten neu aus**. Damit das nicht jedes Mal zu langen Ladezeiten führt, sind die
+Datenbank-Abfragen mit `@st.cache_data` versehen: Ergebnisse werden für eine Stunde
+im Arbeitsspeicher gehalten und blitzschnell wiederverwendet.
+
+**Modularer Aufbau:**
+Das Dashboard ist in klare Abschnitte gegliedert:
+1. **Setup**: Imports, Konstanten (Aktienliste, Farben, Zeiträume)
+2. **Helfer-Funktionen**: Berechnungen für Indikatoren, Statistiken, KGV/KBV
+3. **Chart-Funktionen**: Plotly-Diagramme für jeden Anwendungsfall
+4. **Sidebar**: Bedienelemente für den Nutzer
+5. **Tabs**: die vier Hauptbereiche der App
+
+
