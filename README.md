@@ -15,7 +15,7 @@ lokal in einer **SQLite-Datenbank** zwischengespeichert.
 - **Bewertung**: historische KGV- und KBV-Zeitreihen inkl. Durchschnittswerten
 - **Aktien-Vergleich**: zwei Aktien nebeneinander oder als indexierter Overlay
 - **Benchmark-Vergleich**: gegen S&P 500 (SPY), Nasdaq 100 (QQQ), Dow Jones (DIA)
-- **Lokaler DB-Cache**: Daten müssen nur einmal geladen werden, danach blitzschnell
+- **Lokaler DB-Cache**: Daten müssen nur einmal geladen werden, danach schnell
 - **Robuste Datenladung**: automatischer Fallback yfinance ↔ SimFin, Schutz vor Rate-Limits
 
 ---
