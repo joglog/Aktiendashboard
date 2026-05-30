@@ -260,7 +260,7 @@ with st.sidebar:
 - Anders als in JavaScript (kein Event-Listener) → einfach `company = st.selectbox(...)`
 - `ticker = STOCKS[company]` übersetzt Anzeigename → Börsenkürzel
   - Apple → AAPL, Microsoft → MSFT
-  - **Warum diese Trennung?** Nutzer liest lieber Namen, Datenbank arbeitet mit Kürzeln
+  - weil Datenbank arbeitet mit Kürzeln
 
 ---
 
@@ -310,41 +310,20 @@ Vier Zeilen — viel Logik:
 
 ---
 
-### Indikatorenberechnung am Beispiel RSI
 
-```python
-delta = df["Close"].diff()
-gain = delta.where(delta > 0, 0).rolling(14).mean()
-loss = -delta.where(delta < 0, 0).rolling(14).mean()
-df["RSI"] = 100 - (100 / (1 + gain / loss))
-```
+## 🚀 Ausblick
 
-Vier Zeilen für einen kompletten Indikator — **keine einzige `for`-Schleife**.
+Wir sind mit dem Dashboard insgesamt sehr zufrieden:
 
-- **Zeile 1:** Tägliche Kursdifferenzen ausrechnen
-- **Zeile 2 — Gewinne trennen:**
-  `.where(delta > 0, 0)` = "behalte den Wert wo positiv, sonst setze auf Null"
-  Dann Mittelwert über 14 Tage
-- **Zeile 3 — Verluste:**
-  Dasselbe, mit umgekehrtem Vorzeichen (damit beides positiv ist)
-- **Zeile 4 — Standardformel:**
-  100 minus 100 durch (1 + Verhältnis) → Wert zwischen 0 und 100
-  - Über 70 → Aktie gilt als **überkauft**
-  - Unter 30 → **überverkauft**
+- **Übersichtlich** aufgebaut und intuitiv zu bedienen
+- **Aktienvergleich** sowohl kursmäßig (Charts mit Indikatoren) als auch fundamental (Umsatz, Gewinn, KGV/KBV)
+- **Schnell** dank Caching auf zwei Ebenen
+- **Sauber strukturierte Architektur** — leicht erweiterbar
 
----
+Für die Zukunft fänden wir es spannend, das Dashboard noch zu ergänzen — zum Beispiel um:
 
-### Zusammenfassung
-
-**Sidebar-Steuerung:** Links lassen sich Aktie, Zeitraum, technische Indikatoren,
-Benchmark und eine optionale Vergleichsaktie auswählen. Jede Änderung führt
-sofort zu einem Neu-Rendern der gesamten App.
-
-**Modularer Aufbau:** Das Dashboard ist in klare Abschnitte gegliedert:
-1. **Setup**: Imports, Konstanten (Aktienliste, Farben, Zeiträume)
-2. **Helfer-Funktionen**: Berechnungen für Indikatoren, Statistiken, KGV/KBV
-3. **Chart-Funktionen**: Plotly-Diagramme für jeden Anwendungsfall
-4. **Sidebar**: Bedienelemente für den Nutzer
-5. **Tabs**: die vier Hauptbereiche der App
+- einen **DCF-Rechner** als eigener Tab, mit interaktiver Eingabe von WACC, Terminal Growth und FCF-Marge zur Berechnung eines fairen Aktienwerts
+- eine **Portfolio-Funktion**, um eigene Aktien-Zusammenstellungen zu speichern und ihre Performance zu verfolgen
+- ein **erweitertes Aktien-Universum** über den S&P 100 hinaus (z.B. europäische Werte)
 
 
