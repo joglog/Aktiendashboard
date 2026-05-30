@@ -174,13 +174,13 @@ zu teilen.
 ## 🖥️ Dashboard (`Dashboard.py`)
 
 Das Dashboard ist die Benutzeroberfläche, die im Browser läuft. Gebaut mit
-[Streamlit](https://streamlit.io) — einem Python-Framework, mit dem man
+Streamlit — einem Python-Framework, mit dem man
 interaktive Web-Apps schreiben kann, ohne HTML oder JavaScript zu programmieren.
 Es braucht nur reinen Python-Code.
 
 ---
 
-### Der erste Trick: DB-Verbindung als Singleton
+### Cache
 
 ```python
 @st.cache_resource
@@ -196,22 +196,6 @@ db = get_db()
 
 ---
 
-### Konstanten am Anfang der Datei
-
-```python
-STOCKS = { ... }    # 100 Aktien, nach Sektor gruppiert
-```
-→ Hier werden die Daten der 100 Aktien angezeigt (nach Sektor gruppiert)
-
-```python
-BENCHMARKS = {
-    "Keiner": "", "S&P 500 (SPY)": "SPY",
-    "Nasdaq 100 (QQQ)": "QQQ", "Dow Jones (DIA)": "DIA",
-}
-```
-→ Hier werden Kursdaten der großen Indizes geholt, um Kursverläufe vergleichen zu können
-
----
 
 ### Wie Streamlit tickt
 
@@ -257,7 +241,6 @@ with st.sidebar:
 
 - `with st.sidebar:` öffnet einen Block → alles eingerückt darunter landet in der Seitenleiste
 - `st.selectbox` ist das Dropdown — **gibt direkt den ausgewählten Wert zurück**
-- Anders als in JavaScript (kein Event-Listener) → einfach `company = st.selectbox(...)`
 - `ticker = STOCKS[company]` übersetzt Anzeigename → Börsenkürzel
   - Apple → AAPL, Microsoft → MSFT
   - weil Datenbank arbeitet mit Kürzeln
@@ -281,7 +264,7 @@ tab1, tab2, tab3, tab5 = st.tabs([
 
 ---
 
-### Die KGV-Berechnung — wichtigste Berechnung für den Bewertungs-Tab
+### Die KGV-Berechnung — wichtige Berechnung für den Bewertungs-Tab
 
 ```python
 df_inc["EPS"] = df_inc["Net Income"] / df_inc["Shares (Diluted)"]
@@ -289,8 +272,6 @@ df_inc["EPS_TTM"] = df_inc["EPS"].rolling(4).sum()
 eps_daily = df_inc["EPS_TTM"].reindex(df_prices.index, method="ffill")
 pe = (df_prices["Adj. Close"] / eps_daily).dropna()
 ```
-
-Vier Zeilen — viel Logik:
 
 - **Zeile 1 — EPS berechnen:**
   Earnings per Share = Gewinn pro Aktie = Nettogewinn ÷ Anzahl verwässerter Aktien
@@ -300,7 +281,7 @@ Vier Zeilen — viel Logik:
   - Man nimmt den Jahresgewinn, weil Quartale stark schwanken (z.B. mehr Umsatz in Q1 als Q2/Q3 bei Saisongeschäften)
   - Mit der 12-Monats-Summe glättet sich das aus
 
-- **Zeile 3 — der Kniff: `reindex(method='ffill')`:**
+- **Zeile 3 — `reindex(method='ffill')`:**
   - Problem: Quartalsdaten gibt's 4× im Jahr, Kursdaten täglich → wie rechnen?
   - 'forward fill' = nach vorne ausfüllen: ein Quartalswert von Ende März gilt täglich bis zum nächsten Quartal im Juni
   - Damit gibt es plötzlich **tagesgenaue EPS-Werte**
@@ -318,12 +299,10 @@ Wir sind mit dem Dashboard insgesamt sehr zufrieden:
 - **Übersichtlich** aufgebaut und intuitiv zu bedienen
 - **Aktienvergleich** sowohl kursmäßig (Charts mit Indikatoren) als auch fundamental (Umsatz, Gewinn, KGV/KBV)
 - **Schnell** dank Caching auf zwei Ebenen
-- **Sauber strukturierte Architektur** — leicht erweiterbar
 
 Für die Zukunft fänden wir es spannend, das Dashboard noch zu ergänzen — zum Beispiel um:
 
 - einen **DCF-Rechner** als eigener Tab, mit interaktiver Eingabe von WACC, Terminal Growth und FCF-Marge zur Berechnung eines fairen Aktienwerts
-- eine **Portfolio-Funktion**, um eigene Aktien-Zusammenstellungen zu speichern und ihre Performance zu verfolgen
-- ein **erweitertes Aktien-Universum** über den S&P 100 hinaus (z.B. europäische Werte)
+
 
 
