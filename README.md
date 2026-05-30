@@ -173,12 +173,104 @@ zu teilen.
 
 ## 🖥️ Dashboard (`Dashboard.py`)
 
-Das Dashboard ist die Benutzeroberfläche, die im Browser läuft. Es wird mit
-[Streamlit](https://streamlit.io) gebaut — einem Framework, das aus reinem Python-Code
-eine interaktive Web-App erzeugt, ohne dass HTML oder JavaScript geschrieben werden
-muss.
+Das Dashboard ist die Benutzeroberfläche, die im Browser läuft. Gebaut mit
+[Streamlit](https://streamlit.io) — einem Python-Framework, mit dem man
+interaktive Web-Apps schreiben kann, ohne HTML oder JavaScript zu programmieren.
+Es braucht nur reinen Python-Code.
 
-**Aufbau in vier Tabs:**
+---
+
+### Der erste Trick: DB-Verbindung als Singleton
+
+```python
+@st.cache_resource
+def get_db():
+    return DB()
+db = get_db()
+```
+
+- `@st.cache_resource` ist ein **Decorator** — quasi eine Hülle um die Funktion
+- Sorgt dafür, dass die DB-Verbindung **nur einmal** geöffnet wird
+- Bleibt über alle Klicks hinweg bestehen
+- Ohne diese Hülle: bei jedem Klick neue DB-Verbindung → langsam und unsauber
+
+---
+
+### Konstanten am Anfang der Datei
+
+```python
+STOCKS = { ... }    # 100 Aktien, nach Sektor gruppiert
+```
+→ Hier werden die Daten der 100 Aktien angezeigt (nach Sektor gruppiert)
+
+```python
+BENCHMARKS = {
+    "Keiner": "", "S&P 500 (SPY)": "SPY",
+    "Nasdaq 100 (QQQ)": "QQQ", "Dow Jones (DIA)": "DIA",
+}
+```
+→ Hier werden Kursdaten der großen Indizes geholt, um Kursverläufe vergleichen zu können
+
+---
+
+### Wie Streamlit tickt
+
+- Das Skript wird **bei jeder Interaktion komplett neu ausgeführt**
+- Beispiel: Dropdown-Wechsel von Apple auf Microsoft → ganzer Code läuft von oben bis unten nochmal durch
+- Klingt nach Verschwendung — aber genau deshalb gibt es die Cache-Mechanismen
+
+---
+
+### Eines der wichtigsten Code-Stücke: Caching
+
+```python
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_prices(ticker, period_days=None):
+    if not ticker:
+        return None
+    try:
+        return db.get_prices(ticker, period_days=period_days, auto_refresh=True)
+    except Exception as e:
+        st.error(f"DB-Fehler für {ticker}: {e}")
+        return None
+```
+
+- `get_prices` ist die **Schnittstelle zur Datenbank** — über sie laufen alle Kursabfragen
+- Direkt darunter steht — fast identisch aufgebaut — `get_fundamentals` für die Fundamentaldaten
+- Entscheidend ist `@st.cache_data`:
+  - Wenn die Funktion einmal mit z.B. 'AAPL' aufgerufen wurde und das Ergebnis im Cache liegt → wird beim nächsten Aufruf **gar nicht mehr ausgeführt**
+  - Stattdessen kommt direkt das gespeicherte Ergebnis zurück
+- **Caching auf zwei Ebenen** im Projekt:
+  1. In der Datenbank → Daten persistent auf der Festplatte
+  2. Hier in der App → Arbeitsspeicher für UI-Geschwindigkeit
+
+---
+
+### Die Sidebar — Streamlit-Widgets
+
+```python
+with st.sidebar:
+    st.header("⚙️ Auswahl")
+    company = st.selectbox("🏢 Unternehmen", list(STOCKS.keys()))
+    ticker = STOCKS[company]
+```
+
+- `with st.sidebar:` öffnet einen Block → alles eingerückt darunter landet in der Seitenleiste
+- `st.selectbox` ist das Dropdown — **gibt direkt den ausgewählten Wert zurück**
+- Anders als in JavaScript (kein Event-Listener) → einfach `company = st.selectbox(...)`
+- `ticker = STOCKS[company]` übersetzt Anzeigename → Börsenkürzel
+  - Apple → AAPL, Microsoft → MSFT
+  - **Warum diese Trennung?** Nutzer liest lieber Namen, Datenbank arbeitet mit Kürzeln
+
+---
+
+### Die vier Tabs
+
+```python
+tab1, tab2, tab3, tab5 = st.tabs([
+    "📈 Chart", "📊 Fundamentals", "💎 Bewertung", "🗄️ DB",
+])
+```
 
 | Tab | Inhalt |
 |---|---|
@@ -187,19 +279,68 @@ muss.
 | 💎 **Bewertung** | Historische Zeitreihen von KGV (Kurs-Gewinn-Verhältnis) und KBV (Kurs-Buchwert-Verhältnis) inkl. Durchschnittslinien |
 | 🗄️ **DB** | Datenbank-Status, manuelles Nachladen einzelner oder aller Aktien |
 
-**Sidebar-Steuerung:**
-Links lassen sich Aktie, Zeitraum, technische Indikatoren, Benchmark und eine
-optionale Vergleichsaktie auswählen. Jede Änderung führt sofort zu einem Neu-Rendern
-der gesamten App.
+---
 
-**Wie Streamlit funktioniert:**
-Streamlit führt das Skript bei jeder Benutzer-Interaktion **komplett von oben nach
-unten neu aus**. Damit das nicht jedes Mal zu langen Ladezeiten führt, sind die
-Datenbank-Abfragen mit `@st.cache_data` versehen: Ergebnisse werden für eine Stunde
-im Arbeitsspeicher gehalten und blitzschnell wiederverwendet.
+### Die KGV-Berechnung — wichtigste Berechnung für den Bewertungs-Tab
 
-**Modularer Aufbau:**
-Das Dashboard ist in klare Abschnitte gegliedert:
+```python
+df_inc["EPS"] = df_inc["Net Income"] / df_inc["Shares (Diluted)"]
+df_inc["EPS_TTM"] = df_inc["EPS"].rolling(4).sum()
+eps_daily = df_inc["EPS_TTM"].reindex(df_prices.index, method="ffill")
+pe = (df_prices["Adj. Close"] / eps_daily).dropna()
+```
+
+Vier Zeilen — viel Logik:
+
+- **Zeile 1 — EPS berechnen:**
+  Earnings per Share = Gewinn pro Aktie = Nettogewinn ÷ Anzahl verwässerter Aktien
+
+- **Zeile 2 — `.rolling(4).sum()`:**
+  Rollende Summe der letzten 4 Quartale = **TTM** ("Trailing Twelve Months")
+  - Man nimmt den Jahresgewinn, weil Quartale stark schwanken (z.B. mehr Umsatz in Q1 als Q2/Q3 bei Saisongeschäften)
+  - Mit der 12-Monats-Summe glättet sich das aus
+
+- **Zeile 3 — der Kniff: `reindex(method='ffill')`:**
+  - Problem: Quartalsdaten gibt's 4× im Jahr, Kursdaten täglich → wie rechnen?
+  - 'forward fill' = nach vorne ausfüllen: ein Quartalswert von Ende März gilt täglich bis zum nächsten Quartal im Juni
+  - Damit gibt es plötzlich **tagesgenaue EPS-Werte**
+
+- **Zeile 4 — KGV:**
+  Kurs ÷ EPS — Pandas dividiert ganze Spalten gleichzeitig
+
+---
+
+### Indikatorenberechnung am Beispiel RSI
+
+```python
+delta = df["Close"].diff()
+gain = delta.where(delta > 0, 0).rolling(14).mean()
+loss = -delta.where(delta < 0, 0).rolling(14).mean()
+df["RSI"] = 100 - (100 / (1 + gain / loss))
+```
+
+Vier Zeilen für einen kompletten Indikator — **keine einzige `for`-Schleife**.
+
+- **Zeile 1:** Tägliche Kursdifferenzen ausrechnen
+- **Zeile 2 — Gewinne trennen:**
+  `.where(delta > 0, 0)` = "behalte den Wert wo positiv, sonst setze auf Null"
+  Dann Mittelwert über 14 Tage
+- **Zeile 3 — Verluste:**
+  Dasselbe, mit umgekehrtem Vorzeichen (damit beides positiv ist)
+- **Zeile 4 — Standardformel:**
+  100 minus 100 durch (1 + Verhältnis) → Wert zwischen 0 und 100
+  - Über 70 → Aktie gilt als **überkauft**
+  - Unter 30 → **überverkauft**
+
+---
+
+### Zusammenfassung
+
+**Sidebar-Steuerung:** Links lassen sich Aktie, Zeitraum, technische Indikatoren,
+Benchmark und eine optionale Vergleichsaktie auswählen. Jede Änderung führt
+sofort zu einem Neu-Rendern der gesamten App.
+
+**Modularer Aufbau:** Das Dashboard ist in klare Abschnitte gegliedert:
 1. **Setup**: Imports, Konstanten (Aktienliste, Farben, Zeiträume)
 2. **Helfer-Funktionen**: Berechnungen für Indikatoren, Statistiken, KGV/KBV
 3. **Chart-Funktionen**: Plotly-Diagramme für jeden Anwendungsfall
