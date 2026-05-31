@@ -177,7 +177,6 @@ def refresh_prices(self, ticker: str, force: bool = False) -> bool:
 - **Erst yfinance versuchen** (lange Historie, oft 20+ Jahre)
 - **Wenn das fehlschlägt** → automatisch auf SimFin ausweichen
 - SimFin hat zwar kürzere Historie (~5 Jahre), aber keine Rate-Limits
-- Der Nutzer merkt nichts davon, außer einer kurzen Wartezeit
 
 ---
 
