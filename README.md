@@ -39,7 +39,7 @@ lokal in einer **SQLite-Datenbank** zwischengespeichert.
 
 ```bash
 git clone https://github.com/<joglog>/<Dashboard>.git
-cd <dein-repo-name>
+cd <joglog/dashboard>
 ```
 
 ### 2. Abhängigkeiten installieren
