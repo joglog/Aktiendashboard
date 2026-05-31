@@ -66,7 +66,6 @@ Im Browser öffnet sich automatisch die App unter `http://localhost:8501`.
 ├── Dashboard.py        # Streamlit-Oberfläche (das Dashboard)
 ├── database.py         # Daten-Layer (yfinance/SimFin → SQLite)
 ├── market_data.db      # SQLite-Datenbank (entsteht automatisch beim ersten Start)
-└── README.md           # diese Datei
 ```
 
 ---
