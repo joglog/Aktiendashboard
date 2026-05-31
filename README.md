@@ -257,21 +257,10 @@ cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date)")
 ```
 
 - Indizes sind wie ein "Inhaltsverzeichnis" für die Datenbank
-- Ohne Index müsste die DB bei "alle Kurse von Apple" alle Zeilen durchgehen
-- Mit Index springt sie direkt zu den passenden Einträgen
-- Bei über einer Million Kurszeilen macht das den Unterschied zwischen
-  **Millisekunden und Sekunden**
+- Abfragen werden durch Indizes deutlich schneller gelöst
 
 ---
 
-### Typische Größe
-
-- Bei 100 Aktien mit voller Historie und allen Fundamentaldaten:
-  **zwischen 30 und 100 MB**
-- Klein genug für USB-Stick oder E-Mail-Anhang
-- Lässt sich problemlos zwischen Geräten übertragen
-
----
 
 ## 🖥️ Dashboard (`Dashboard.py`)
 
