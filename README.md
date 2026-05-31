@@ -57,16 +57,6 @@ Im Browser öffnet sich automatisch die App unter `http://localhost:8501`.
 
 > **Hinweis:** Beim allerersten Aufruf einer Aktie werden die Daten aus dem Internet geladen — das dauert wenige Sekunden. Danach kommt alles aus der lokalen Datenbank und ist sofort verfügbar.
 
----
-
-## 📁 Projekt-Struktur
-
-```
-.
-├── Dashboard.py        # Streamlit-Oberfläche (das Dashboard)
-├── database.py         # Daten-Layer (yfinance/SimFin → SQLite)
-├── market_data.db      # SQLite-Datenbank (entsteht automatisch beim ersten Start)
-```
 
 ---
 
