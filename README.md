@@ -192,8 +192,8 @@ FUNDAMENTALS_TTL_DAYS = 7   # Fundamentals wöchentlich
 - Fundamentaldaten: 7 Tage (Quartalsberichte erscheinen nur 4× im Jahr,
   also reicht wöchentlich völlig)
 - Bei jeder Anfrage prüft `_needs_refresh()`: Sind die DB-Daten noch jung genug?
-- Wenn ja → direkt aus der DB lesen (schnell)
-- Wenn nein → frisch laden (langsamer, aber aktuell)
+     - Wenn ja → direkt aus der DB lesen (schnell)
+     - Wenn nein → frisch laden (langsamer, aber aktuell)
 
 ---
 
