@@ -196,7 +196,6 @@ ersten Start automatisch erzeugt — manuelles Anlegen ist nicht nötig.
 ### Warum SQLite?
 
 - **Kein Server nötig** — alles in einer einzigen `.db`-Datei
-- **Leicht zu kopieren und sichern** 
 - **Schnell** auch bei mehreren Millionen Zeilen
 - **Inspizierbar** mit Tools wie [DB Browser for SQLite](https://sqlitebrowser.org/)
 - **Plattformunabhängig** — gleiche Datei läuft unter Windows, Mac, Linux
