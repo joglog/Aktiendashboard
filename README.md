@@ -141,7 +141,7 @@ class DB:
 
 - yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
 - Yahoo blockiert bei zu vielen Anfragen → Fehler "Too Many Requests"
-- Dagegen habe ich drei Schutzmechanismen eingebaut
+- Dagegen gibt es folgende Schutzmechanismen:
 
 ---
 
