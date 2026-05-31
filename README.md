@@ -74,7 +74,8 @@ Im Browser öffnet sich automatisch die App unter `http://localhost:8501`.
 
 ## 🏗️ Architektur
 
-Das Projekt folgt einer klaren **Drei-Schichten-Architektur**:
+Das Projekt folgt einer klaren **Drei-Schichten-Architektur** — jede Schicht hat
+eine klare Aufgabe und kennt nur die nächste darunter:
 
 ```
    yfinance (Kurse)  ──  SimFin (Fundamentaldaten)
@@ -88,86 +89,190 @@ Das Projekt folgt einer klaren **Drei-Schichten-Architektur**:
               Browser
 ```
 
-**Die Datenbank** enthält sechs Tabellen:
+**Warum diese Trennung?**
 
-- `prices` — tägliche Kurse (OHLCV)
-- `income` / `balance` / `cashflow` — Quartalsabschlüsse
-- `metrics_ttm` — vorberechnete Trailing-Twelve-Months-Kennzahlen
-- `update_log` — Protokoll, welche Aktie wann aus welcher Quelle geladen wurde
-
-**Caching auf zwei Ebenen:**
-- **DB-Ebene:** Daten werden persistent gespeichert und nach Ablauf einer TTL (1 Tag für Kurse, 7 Tage für Fundamentaldaten) automatisch aktualisiert.
-- **App-Ebene:** Streamlits `@st.cache_data` hält Ergebnisse im Arbeitsspeicher, damit Tab-Wechsel und Auswahländerungen sofort reagieren.
-
-**Robustheit gegen Rate-Limits:**
-- yfinance-Anfragen werden gedrosselt (min. 2 Sekunden Pause zwischen Calls)
-- Bei "Too Many Requests" automatischer Fallback auf SimFin
-- Bei Erfolg über SimFin wird beim nächsten Mal erneut yfinance versucht (für längere Historie)
+- **Separation of Concerns** — jede Datei macht genau eine Sache:
+  - `database.py` → Daten beschaffen und speichern
+  - `market_data.db` → Daten festhalten
+  - `Dashboard.py` → Daten anzeigen
+- **Austauschbar:** Wenn morgen SimFin abgeschaltet wird, muss nur `database.py`
+  angepasst werden — am Dashboard ändert sich keine Zeile
+- **Robust:** Fällt das Internet aus, funktioniert das Dashboard weiter mit den
+  zuletzt gespeicherten Daten
 
 ---
 
 ## 🔌 Datenlayer (`database.py`)
 
 Der Datenlayer ist die zentrale Schnittstelle zwischen den externen Datenquellen
-und der lokalen Datenbank. Das Dashboard kommuniziert ausschließlich mit dieser Schicht
-und weiß nichts davon, woher die Daten ursprünglich kommen.
+und der lokalen Datenbank. Das Dashboard kommuniziert ausschließlich mit dieser
+Schicht und weiß nichts davon, woher die Daten ursprünglich kommen.
 
-**Hauptaufgaben:**
-- **Daten beschaffen**: Kurse von yfinance, Fundamentaldaten von SimFin
-- **Daten putzen**: Spaltennamen vereinheitlichen, Datumsformate normalisieren, fehlende Werte behandeln
-- **Daten speichern**: alles in die SQLite-Datenbank schreiben
-- **Daten ausliefern**: auf Anfrage des Dashboards die passenden Zeitreihen aus der DB lesen
+---
 
-**Wichtige Funktionen:**
+### Die Klasse `DB` — der zentrale Einstiegspunkt
+
+```python
+class DB:
+    def __init__(self, db_path: Path = DB_PATH):
+        ...
+        self._init_schema()
+```
+
+- Eine einzige Klasse bündelt alle Datenbank-Operationen
+- Beim Erstellen mit `DB()` wird automatisch:
+  - die Verbindung zur SQLite-Datei aufgebaut
+  - das Schema angelegt (Tabellen + Indizes), falls noch nicht vorhanden
+  - der SimFin-API-Key gesetzt
+
+---
+
+### Die wichtigsten öffentlichen Funktionen
 
 | Funktion | Zweck |
 |---|---|
-| `DB()` | Initialisiert die Datenbank-Verbindung und legt bei Bedarf die Tabellen an |
 | `get_prices(ticker)` | Liefert Kurse einer Aktie — automatisch nachgeladen bei Bedarf |
 | `get_fundamentals(ticker)` | Liefert Income/Balance/Cashflow-Daten |
 | `refresh_prices(ticker)` | Erzwingt manuelles Nachladen der Kurse |
 | `refresh_fundamentals(ticker)` | Erzwingt Nachladen der Fundamentaldaten |
-| `get_status()` | Liefert eine Übersicht, wann welche Aktie zuletzt aktualisiert wurde |
+| `get_status()` | Übersicht: wann wurde welche Aktie zuletzt aktualisiert |
 
-**TTL-Logik (Time-To-Live):**
-Bei jeder Abfrage prüft der Datenlayer, ob die gespeicherten Daten noch "frisch" sind.
-Kurse gelten einen Tag als aktuell, Fundamentaldaten eine Woche (da Quartalsberichte
-nur viermal im Jahr erscheinen). Veraltete Daten werden automatisch aus dem Internet
-nachgeladen — der Nutzer merkt davon nichts außer einer kurzen Wartezeit.
+---
+
+### Das Hauptproblem: yfinance-Rate-Limits
+
+- yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
+- Yahoo blockiert bei zu vielen Anfragen → Fehler "Too Many Requests"
+- Dagegen habe ich drei Schutzmechanismen eingebaut
+
+---
+
+### Schutz 1 — Throttling (Pause zwischen Anfragen)
+
+```python
+YF_THROTTLE_SECONDS = 2.0   # Pause zwischen yfinance-Calls
+
+@classmethod
+def _throttle_yf(cls):
+    elapsed = time.time() - cls._last_yf_call
+    if elapsed < YF_THROTTLE_SECONDS:
+        time.sleep(YF_THROTTLE_SECONDS - elapsed)
+```
+
+- Vor jedem yfinance-Aufruf wird geprüft: Wann war der letzte Aufruf?
+- Wenn weniger als 2 Sekunden vergangen sind → automatisch warten
+- So feuert das Programm nicht 100 Anfragen auf einmal ab
+
+---
+
+### Schutz 2 — Fallback yfinance ↔ SimFin
+
+```python
+def refresh_prices(self, ticker: str, force: bool = False) -> bool:
+    ...
+    df = self._fetch_prices_yf(ticker)        # 1. Versuch: yfinance
+    if df is None or df.empty:
+        df = self._fetch_prices_simfin(ticker)  # 2. Versuch: SimFin
+    ...
+```
+
+- **Erst yfinance versuchen** (lange Historie, oft 20+ Jahre)
+- **Wenn das fehlschlägt** → automatisch auf SimFin ausweichen
+- SimFin hat zwar kürzere Historie (~5 Jahre), aber keine Rate-Limits
+- Der Nutzer merkt nichts davon, außer einer kurzen Wartezeit
+
+---
+
+### Schutz 3 — TTL-Logik (Daten nur nachladen, wenn veraltet)
+
+```python
+PRICE_TTL_DAYS = 1          # Preise täglich aktualisieren
+FUNDAMENTALS_TTL_DAYS = 7   # Fundamentals wöchentlich
+```
+
+- **TTL** = "Time To Live", also: Wie lange gelten Daten als frisch?
+- Kurse: 1 Tag (aktualisieren sich täglich)
+- Fundamentaldaten: 7 Tage (Quartalsberichte erscheinen nur 4× im Jahr,
+  also reicht wöchentlich völlig)
+- Bei jeder Anfrage prüft `_needs_refresh()`: Sind die DB-Daten noch jung genug?
+- Wenn ja → direkt aus der DB lesen (schnell)
+- Wenn nein → frisch laden (langsamer, aber aktuell)
 
 ---
 
 ## 🗄️ Datenbank (`market_data.db`)
 
-Die Datenbank ist eine einzelne SQLite-Datei im Projektordner. Sie wird beim ersten
-Start automatisch erzeugt — manuelles Anlegen ist nicht nötig.
+Die Datenbank ist eine **einzige SQLite-Datei** im Projektordner. Sie wird beim
+ersten Start automatisch erzeugt — manuelles Anlegen ist nicht nötig.
 
-**Vorteile von SQLite für dieses Projekt:**
-- **Kein Server nötig**: alles in einer einzigen Datei, leicht zu kopieren und sichern
+---
+
+### Warum SQLite?
+
+- **Kein Server nötig** — alles in einer einzigen `.db`-Datei
+- **Leicht zu kopieren und sichern** (z.B. per USB-Stick)
 - **Schnell** auch bei mehreren Millionen Zeilen
-- **Inspizierbar**: kann mit Tools wie [DB Browser for SQLite](https://sqlitebrowser.org/) geöffnet und durchsucht werden
-- **Plattformunabhängig**: gleiche Datei funktioniert unter Windows, Mac und Linux
+- **Inspizierbar** mit Tools wie [DB Browser for SQLite](https://sqlitebrowser.org/)
+- **Plattformunabhängig** — gleiche Datei läuft unter Windows, Mac, Linux
 
-**Tabellen-Übersicht:**
+---
+
+### Sechs Tabellen im Schema
 
 | Tabelle | Inhalt | Frequenz |
 |---|---|---|
 | `prices` | Open, High, Low, Close, Volume pro Aktie und Tag | täglich |
-| `income` | Gewinn-und-Verlust-Rechnung (Umsatz, Kosten, Net Income, EPS, …) | quartalsweise |
+| `income` | Gewinn-und-Verlust-Rechnung (Umsatz, Net Income, EPS, …) | quartalsweise |
 | `balance` | Bilanz (Aktiva, Passiva, Eigenkapital, Schulden) | quartalsweise |
-| `cashflow` | Kapitalflussrechnung (operativer Cashflow, Investitionen, …) | quartalsweise |
+| `cashflow` | Kapitalflussrechnung (operativer Cashflow, CapEx, …) | quartalsweise |
 | `metrics_ttm` | vorberechnete Trailing-Twelve-Months-Kennzahlen | abgeleitet |
-| `update_log` | Protokoll aller Lade-Vorgänge inkl. Quelle und Zeitstempel | bei jedem Update |
+| `update_log` | Protokoll: welche Aktie wann aus welcher Quelle geladen | bei jedem Update |
 
-**Indizes:**
-Auf den häufig abgefragten Spalten (`ticker`, `date`) sind Indizes angelegt, damit
-Abfragen wie "alle Kurse von Apple" in Millisekunden zurückkommen, statt die ganze
-Tabelle zu durchsuchen.
+---
 
-**Größe der Datenbank:**
-Bei 100 Aktien mit voller Historie und allen Fundamentaldaten typischerweise zwischen
-30 und 100 MB — klein genug, um sie problemlos auf einem USB-Stick oder per E-Mail
-zu teilen.
+### Tabellen werden automatisch angelegt
+
+```python
+def _init_schema(self):
+    ...
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS prices (
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open REAL, high REAL, low REAL, close REAL,
+            adj_close REAL, volume INTEGER,
+            PRIMARY KEY (ticker, date)
+        )
+    """)
+```
+
+- `CREATE TABLE IF NOT EXISTS` → wird nur angelegt, falls noch nicht da
+- **Primärschlüssel** `(ticker, date)` → keine Doppelungen möglich
+- Beim ersten Start: alle 6 Tabellen entstehen in einem Rutsch
+
+---
+
+### Indizes für Geschwindigkeit
+
+```python
+cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker)")
+cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date)")
+```
+
+- Indizes sind wie ein "Inhaltsverzeichnis" für die Datenbank
+- Ohne Index müsste die DB bei "alle Kurse von Apple" alle Zeilen durchgehen
+- Mit Index springt sie direkt zu den passenden Einträgen
+- Bei über einer Million Kurszeilen macht das den Unterschied zwischen
+  **Millisekunden und Sekunden**
+
+---
+
+### Typische Größe
+
+- Bei 100 Aktien mit voller Historie und allen Fundamentaldaten:
+  **zwischen 30 und 100 MB**
+- Klein genug für USB-Stick oder E-Mail-Anhang
+- Lässt sich problemlos zwischen Geräten übertragen
 
 ---
 
