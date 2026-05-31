@@ -73,8 +73,7 @@ eine klare Aufgabe und kennt nur die nächste darunter:
             market_data.db          (SQLite — lokaler Zwischenspeicher)
                   ▼
             Dashboard.py            (Streamlit-Oberfläche, nur Anzeige)
-                  ▼
-              Browser
+                
 ```
 
 **Warum diese Trennung?**
