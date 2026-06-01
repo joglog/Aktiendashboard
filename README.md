@@ -110,7 +110,6 @@ class DB:
 - Beim Erstellen mit `DB()` wird automatisch:
   - die Verbindung zur SQLite-Datei aufgebaut
   - das Schema angelegt (Tabellen + Indizes), falls noch nicht vorhanden
-  - der SimFin-API-Key gesetzt
 
 ---
 
@@ -223,7 +222,6 @@ def _init_schema(self):
 
 - `CREATE TABLE IF NOT EXISTS` → wird nur angelegt, falls noch nicht da
 - **Primärschlüssel** `(ticker, date)` → keine Doppelungen möglich
-- Beim ersten Start: alle 6 Tabellen entstehen in einem Rutsch
 
 ---
 
