@@ -63,7 +63,7 @@ Im Browser öffnet sich automatisch die App unter `http://localhost:8501`.
 ## 🏗️ Architektur
 
 Das Projekt folgt einer klaren **Drei-Schichten-Architektur** — jede Schicht hat
-eine klare Aufgabe und kennt nur die nächste darunter:
+eine klare Aufgabe:
 
 ```
    yfinance (Kurse)  ──  SimFin (Fundamentaldaten)
@@ -129,7 +129,7 @@ class DB:
 ### Das Hauptproblem: yfinance-Rate-Limits
 
 - yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
-- Yahoo blockiert bei zu vielen Anfragen → Fehler "Too Many Requests"
+- Yahoo blockiert bei zu vielen Anfragen 
 - Dagegen gibt es folgende Schutzmechanismen:
 
 ---
@@ -148,7 +148,7 @@ def _throttle_yf(cls):
 
 - Vor jedem yfinance-Aufruf wird geprüft: Wann war der letzte Aufruf?
 - Wenn weniger als 2 Sekunden vergangen sind → automatisch warten
-- So feuert das Programm nicht 100 Anfragen auf einmal ab
+- So werden zu viele Anfragen auf einmal verhindert
 
 ---
 
@@ -177,9 +177,8 @@ FUNDAMENTALS_TTL_DAYS = 7   # Fundamentals wöchentlich
 ```
 
 - **TTL** = "Time To Live", also: Wie lange gelten Daten als frisch?
-- Kurse: 1 Tag (aktualisieren sich täglich)
-- Fundamentaldaten: 7 Tage (Quartalsberichte erscheinen nur 4× im Jahr,
-  also reicht wöchentlich völlig)
+- Kurse: 1 Tag 
+- Fundamentaldaten: 7 Tage 
 - Bei jeder Anfrage prüft `_needs_refresh()`: Sind die DB-Daten noch jung genug?
      - Wenn ja → direkt aus der DB lesen (schnell)
      - Wenn nein → frisch laden (langsamer, aber aktuell)
