@@ -82,10 +82,6 @@ eine klare Aufgabe:
   - `database.py` → Daten beschaffen und speichern
   - `market_data.db` → Daten festhalten
   - `Dashboard.py` → Daten anzeigen
-- **Austauschbar:** Wenn morgen SimFin abgeschaltet wird, muss nur `database.py`
-  angepasst werden — am Dashboard ändert sich keine Zeile
-- **Robust:** Fällt das Internet aus, funktioniert das Dashboard weiter mit den
-  zuletzt gespeicherten Daten
 
 ---
 
