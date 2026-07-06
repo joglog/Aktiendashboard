@@ -1,25 +1,13 @@
-# 📊 S&P 100 Aktien-Dashboard
+# S&P 100 Aktien-Dashboard
 
-Interaktives Streamlit-Dashboard zur Analyse der 100 größten US-Aktien (S&P 100).
-Zeigt Kursverläufe mit technischen Indikatoren, Fundamentaldaten und Bewertungs­kennzahlen.
-
-Daten kommen aus **yfinance** (Kurse) und **SimFin** (Fundamentaldaten) und werden
-lokal in einer **SQLite-Datenbank** zwischengespeichert.
-
----
-
-## 🎯 Features
-
-- **Kurs-Chart**: Candlestick-Darstellung mit gleitenden Durchschnitten (SMA), RSI, MACD und Volumen
-- **Fundamentaldaten**: Umsatz, Gewinn, EPS und Nettomarge pro Quartal
-- **Bewertung**: historische KGV- und KBV-Zeitreihen inkl. Durchschnittswerten
-- **Aktien-Vergleich**: zwei Aktien nebeneinander oder als indexierter Overlay
-- **Benchmark-Vergleich**: gegen S&P 500 (SPY), Nasdaq 100 (QQQ), Dow Jones (DIA)
-
+Interaktives Dashboard zur Analyse der 100 größten US-Aktien (S&P 100), gebaut mit
+Python und Streamlit. Es zeigt Kursverläufe mit technischen Indikatoren,
+Fundamentaldaten, Bewertungskennzahlen, eine DCF-Unternehmensbewertung und aktuelle
+News — mit lokaler Datenbank als Zwischenspeicher.
 
 ---
 
-## 🛠️ Tech-Stack
+## Tech-Stack
 
 | Bereich | Tool |
 |---|---|
@@ -32,155 +20,73 @@ lokal in einer **SQLite-Datenbank** zwischengespeichert.
 
 ---
 
-## 🚀 Installation & Start
+## Architektur
 
-### 1. Repository klonen
+Das Projekt folgt einer **Drei-Schichten-Architektur** — mit einer Besonderheit:
+News und Earnings-Daten gehen direkt an das Dashboard, ohne den Umweg über die
+Datenbank.
 
-```bash
-git clone https://github.com/<joglog>/<Dashboard>.git
-cd <joglog/dashboard>
+```
+   yfinance (Kurse) ── SimFin (Fundamentaldaten)      yfinance (News, Earnings)
+                ▼                                          │
+           database.py   (Daten-Layer)                     │
+                ▼                                          │  direkt,
+          market_data.db  (SQLite-Speicher)                │  ohne Datenbank
+                ▼                                          │
+           Dashboard.py   (Streamlit-Oberfläche)  ◄────────┘
+                ▼
+             Browser
 ```
 
-### 2. Abhängigkeiten installieren
+**Was jede Schicht macht:**
 
-```bash
-pip install streamlit pandas numpy plotly simfin yfinance
-```
+- `database.py` → beschafft Kurse und Fundamentaldaten, bereinigt sie und speichert sie
+- `market_data.db` → hält alle Kurse und Fundamentaldaten dauerhaft fest
+- `Dashboard.py` → berechnet Kennzahlen, zeichnet Diagramme, zeigt alles an
 
-### 3. Dashboard starten
+**Zwei Datenwege:**
 
-```bash
-streamlit run Dashboard.py
-```
-
-Im Browser öffnet sich automatisch die App unter `http://localhost:8501`.
-
-> **Hinweis:** Beim allerersten Aufruf einer Aktie werden die Daten aus dem Internet geladen — das dauert wenige Sekunden. Danach kommt alles aus der lokalen Datenbank und ist sofort verfügbar.
-
+- Kurse und Fundamentaldaten laufen über die Datenbank — dauerhaft gespeichert,
+  nur bei Bedarf nachgeladen
+- News und Earnings-Überraschungen holt das Dashboard direkt von yfinance —
+  sie sind flüchtig und werden nur kurz im Arbeitsspeicher gehalten
 
 ---
 
-## 🏗️ Architektur
-
-Das Projekt folgt einer klaren **Drei-Schichten-Architektur** — jede Schicht hat
-eine klare Aufgabe:
-
-```
-   yfinance (Kurse)  ──  SimFin (Fundamentaldaten)
-                  ▼
-             database.py            (Daten-Layer: laden, putzen, speichern)
-                  ▼
-            market_data.db          (SQLite — lokaler Zwischenspeicher)
-                  ▼
-            Dashboard.py            (Streamlit-Oberfläche, nur Anzeige)
-                
-```
-
-**Warum diese Trennung?**
-
-- **Separation of Concerns** — jede Datei macht genau eine Sache:
-  - `database.py` → Daten beschaffen und speichern
-  - `market_data.db` → Daten festhalten
-  - `Dashboard.py` → Daten anzeigen
-
----
-
-## 🔌 Datenlayer (`database.py`)
+## Datenlayer (`database.py`)
 
 Der Datenlayer ist die zentrale Schnittstelle zwischen den externen Datenquellen
-und der lokalen Datenbank. Das Dashboard kommuniziert ausschließlich mit dieser
-Schicht und weiß nichts davon, woher die Daten ursprünglich kommen.
+und der lokalen Datenbank. Das Dashboard kommuniziert für Kurse und Fundamentaldaten
+ausschließlich mit dieser Schicht und weiß nichts davon, woher die Daten
+ursprünglich kommen.
 
----
-
-### Die Klasse `DB` — der zentrale Einstiegspunkt
-
-```python
-class DB:
-    def __init__(self, db_path: Path = DB_PATH):
-        ...
-        self._init_schema()
-```
-
-- Eine einzige Klasse bündelt alle Datenbank-Operationen
-- Beim Erstellen mit `DB()` wird automatisch:
-  - die Verbindung zur SQLite-Datei aufgebaut
-  - das Schema angelegt (Tabellen + Indizes), falls noch nicht vorhanden
-
----
-
-### Die wichtigsten öffentlichen Funktionen
-
-| Funktion | Zweck |
-|---|---|
-| `get_prices(ticker)` | Liefert Kurse einer Aktie — automatisch nachgeladen bei Bedarf |
-| `get_fundamentals(ticker)` | Liefert Income/Balance/Cashflow-Daten |
-| `refresh_prices(ticker)` | Erzwingt manuelles Nachladen der Kurse |
-| `refresh_fundamentals(ticker)` | Erzwingt Nachladen der Fundamentaldaten |
-| `get_status()` | Übersicht: wann wurde welche Aktie zuletzt aktualisiert |
-
----
-
-### Das Hauptproblem: yfinance-Rate-Limits
-
-- yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
-- Yahoo blockiert bei zu vielen Anfragen 
-- Dagegen gibt es folgende Schutzmechanismen:
-
----
-
-### Schutz 1 — Throttling (Pause zwischen Anfragen)
+So ist der Datenlayer mit Datenbank und Dashboard verbunden:
 
 ```python
-YF_THROTTLE_SECONDS = 2.0   # Pause zwischen yfinance-Calls
+# In Dashboard.py — die einzige Verbindung zum Datenlayer:
+from database import DB
 
-@classmethod
-def _throttle_yf(cls):
-    elapsed = time.time() - cls._last_yf_call
-    if elapsed < YF_THROTTLE_SECONDS:
-        time.sleep(YF_THROTTLE_SECONDS - elapsed)
+@st.cache_resource
+def get_db():
+    return DB()          # öffnet market_data.db, legt Tabellen bei Bedarf an
+db = get_db()
+
+# Alle Kurs- und Fundamentaldaten-Abfragen laufen dann über:
+df = db.get_prices(ticker)
+fund = db.get_fundamentals(ticker)
 ```
 
-- Vor jedem yfinance-Aufruf wird geprüft: Wann war der letzte Aufruf?
-- Wenn weniger als 2 Sekunden vergangen sind → automatisch warten
-- So werden zu viele Anfragen auf einmal verhindert
+- die Klasse `DB` bündelt alle Datenbank-Operationen
+- `get_prices()` / `get_fundamentals()` prüfen automatisch, ob die gespeicherten
+  Daten noch aktuell sind (Kurse: 1 Tag, Fundamentals: 7 Tage) und laden nur bei
+  Bedarf nach
+- gegen die Rate-Limits von yfinance gibt es drei Schutzmechanismen: gedrosselte
+  Anfragen (2 Sekunden Pause), automatischer Fallback auf SimFin, und die
+  TTL-Logik, die unnötige Anfragen von vornherein vermeidet
 
 ---
 
-### Schutz 2 — Fallback yfinance ↔ SimFin
-
-```python
-def refresh_prices(self, ticker: str, force: bool = False) -> bool:
-    ...
-    df = self._fetch_prices_yf(ticker)        # 1. Versuch: yfinance
-    if df is None or df.empty:
-        df = self._fetch_prices_simfin(ticker)  # 2. Versuch: SimFin
-    ...
-```
-
-- **Erst yfinance versuchen** (lange Historie, oft 20+ Jahre)
-- **Wenn das fehlschlägt** → automatisch auf SimFin ausweichen
-- SimFin hat zwar kürzere Historie (~5 Jahre), aber keine Rate-Limits
-
----
-
-### Schutz 3 — TTL-Logik (Daten nur nachladen, wenn veraltet)
-
-```python
-PRICE_TTL_DAYS = 1          # Preise täglich aktualisieren
-FUNDAMENTALS_TTL_DAYS = 7   # Fundamentals wöchentlich
-```
-
-- **TTL** = "Time To Live", also: Wie lange gelten Daten als frisch?
-- Kurse: 1 Tag 
-- Fundamentaldaten: 7 Tage 
-- Bei jeder Anfrage prüft `_needs_refresh()`: Sind die DB-Daten noch jung genug?
-     - Wenn ja → direkt aus der DB lesen (schnell)
-     - Wenn nein → frisch laden (langsamer, aber aktuell)
-
----
-
-## 🗄️ Datenbank (`market_data.db`)
+## Datenbank (`market_data.db`)
 
 Die Datenbank ist eine **einzige SQLite-Datei** im Projektordner. Sie wird beim
 ersten Start automatisch erzeugt — manuelles Anlegen ist nicht nötig.
@@ -233,63 +139,22 @@ cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date)")
 
 ---
 
-
-## 🖥️ Dashboard (`Dashboard.py`)
+## Dashboard (`Dashboard.py`)
 
 Das Dashboard ist die Benutzeroberfläche, die im Browser läuft. Gebaut mit
-Streamlit — einem Python-Framework, mit dem man
-interaktive Web-Apps schreiben kann, ohne HTML oder JavaScript zu programmieren.
-Es braucht nur reinen Python-Code.
+Streamlit — einem Python-Framework, mit dem man interaktive Web-Apps schreiben
+kann, ohne HTML oder JavaScript zu programmieren. Es braucht nur reinen
+Python-Code.
 
 ---
 
-### Cache
+### Wie Streamlit tickt — und warum Caching nötig ist
 
-```python
-@st.cache_resource
-def get_db():
-    return DB()
-db = get_db()
-```
-
-- `@st.cache_resource` ist ein **Decorator** — quasi eine Hülle um die Funktion
-- Sorgt dafür, dass die DB-Verbindung **nur einmal** geöffnet wird
-- Bleibt über alle Klicks hinweg bestehen
-- Ohne diese Hülle: bei jedem Klick neue DB-Verbindung → langsam und unsauber
-
----
-
-
-### Wie Streamlit tickt
-
-- Das Skript wird **bei jeder Interaktion komplett neu ausgeführt**
-- Beispiel: Dropdown-Wechsel von Apple auf Microsoft → ganzer Code läuft von oben bis unten nochmal durch
-- Klingt nach Verschwendung — aber genau deshalb gibt es die Cache-Mechanismen
-
----
-
-### Eines der wichtigsten Code-Stücke: Caching
-
-```python
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_prices(ticker, period_days=None):
-    if not ticker:
-        return None
-    try:
-        return db.get_prices(ticker, period_days=period_days, auto_refresh=True)
-    except Exception as e:
-        st.error(f"DB-Fehler für {ticker}: {e}")
-        return None
-```
-
-- `get_prices` ist die **Schnittstelle zur Datenbank** — über sie laufen alle Kursabfragen
-- Direkt darunter steht — fast identisch aufgebaut — `get_fundamentals` für die Fundamentaldaten
-- Entscheidend ist `@st.cache_data`:
-  - Wenn die Funktion einmal mit z.B. 'AAPL' aufgerufen wurde und das Ergebnis im Cache liegt → wird beim nächsten Aufruf **gar nicht mehr ausgeführt**
-  - Stattdessen kommt direkt das gespeicherte Ergebnis zurück
-- **Caching auf zwei Ebenen** im Projekt:
-  1. In der Datenbank → Daten persistent auf der Festplatte
-  2. Hier in der App → Arbeitsspeicher für UI-Geschwindigkeit
+- das Skript wird **bei jeder Interaktion komplett neu ausgeführt**
+- damit das schnell bleibt, gibt es Caching auf zwei Ebenen:
+  - die DB-Verbindung wird mit `@st.cache_resource` nur einmal geöffnet
+  - Datenabfragen sind mit `@st.cache_data` versehen — Ergebnisse bleiben eine
+    Stunde im Arbeitsspeicher und werden bei erneutem Aufruf sofort zurückgegeben
 
 ---
 
@@ -306,28 +171,72 @@ with st.sidebar:
 - `st.selectbox` ist das Dropdown — **gibt direkt den ausgewählten Wert zurück**
 - `ticker = STOCKS[company]` übersetzt Anzeigename → Börsenkürzel
   - Apple → AAPL, Microsoft → MSFT
-  - weil Datenbank arbeitet mit Kürzeln
+  - weil die Datenbank mit Kürzeln arbeitet
 
 ---
 
-### Die vier Tabs
+### Die sechs Tabs
 
 ```python
-tab1, tab2, tab3, tab5 = st.tabs([
-    "📈 Chart", "📊 Fundamentals", "💎 Bewertung", "🗄️ DB",
+tab1, tab2, tab3, tab4, tab_news, tab5 = st.tabs([
+    "📈 Chart", "📊 Fundamentals", "💰 Bewertung", "🧮 DCF", "📰 News", "🗄️ DB",
 ])
 ```
 
 | Tab | Inhalt |
 |---|---|
-| 📈 **Chart** | Candlestick-Kurschart mit zuschaltbaren Indikatoren (SMA 20/50/100/200, RSI, MACD, Volumen) plus Performance-Kennzahlen (Kurs, Return, CAGR, Volatilität, Alpha, Beta) |
-| 📊 **Fundamentals** | Quartalsweise Darstellung von Umsatz, Gewinn, EPS und Nettomarge als gestapelte Diagramme |
-| 💎 **Bewertung** | Historische Zeitreihen von KGV (Kurs-Gewinn-Verhältnis) und KBV (Kurs-Buchwert-Verhältnis) inkl. Durchschnittslinien |
-| 🗄️ **DB** | Datenbank-Status, manuelles Nachladen einzelner oder aller Aktien |
+| **Chart** | Candlestick-Kurschart mit zuschaltbaren Indikatoren plus Performance-Kennzahlen und Ereignis-Markern |
+| **Fundamentals** | Quartalsweise Darstellung von Umsatz, Gewinn, EPS und Nettomarge |
+| **Bewertung** | Historische Zeitreihen von KGV und KBV inkl. Durchschnittslinien |
+| **DCF** | Discounted-Cash-Flow-Bewertung: fairer Wert je Aktie mit einstellbaren Annahmen |
+| **News** | Aktuelle Schlagzeilen zur gewählten Aktie |
+| **DB** | Datenbank-Status, manuelles Nachladen einzelner oder aller Aktien |
 
 ---
 
-### Die KGV-Berechnung — wichtige Berechnung für den Bewertungs-Tab
+### Tab 1: Chart — die Indikatoren kurz erklärt
+
+- **SMA (Simple Moving Average):** Durchschnitt der letzten N Schlusskurse
+  (20/50/100/200 Tage). Glättet Schwankungen und macht den Trend sichtbar.
+- **RSI (Relative Strength Index):** Skala 0–100, misst die Stärke der Gewinn-
+  gegenüber den Verlust-Tagen der letzten 14 Tage. Über 70 überkauft, unter 30 überverkauft.
+- **MACD:** Differenz zweier exponentieller Durchschnitte (12/26 Tage). Kreuzt die
+  MACD-Linie ihre Signal-Linie nach oben, gilt das als Kaufsignal.
+- **Volumen:** gehandelte Stückzahl pro Tag, optional mit 20-Tage-Durchschnitt.
+
+Performance-Kennzahlen oberhalb des Charts:
+
+- **CAGR:** durchschnittliche jährliche Rendite, geometrisch berechnet
+- **Volatilität:** annualisierte Schwankungsbreite der Tagesrenditen
+- **Beta:** Sensitivität zum Benchmark (1 = bewegt sich wie der Markt)
+- **Alpha:** risikobereinigte Überrendite gegenüber dem Benchmark
+
+Ereignis-Marker (zuschaltbar, unten am Chart):
+
+- **Earnings-Termine:** grün = Gewinnerwartung übertroffen, rot = verfehlt
+  (Details im Tooltip; Quelle: yfinance, ca. letzte 2 Jahre)
+- **Markt-Ereignisse:** 12 kuratierte Ereignisse (Corona, Fed-Zinswende, Wahlen,
+  ChatGPT-Start), farbig nach Kategorie, Beschreibung im Tooltip
+
+---
+
+### Tab 2: Fundamentals — EPS und Nettomarge
+
+- **EPS (Earnings per Share):** Gewinn pro Aktie = Nettogewinn ÷ Anzahl
+  verwässerter Aktien
+- **Nettomarge:** Nettogewinn ÷ Umsatz × 100 — wie viele Cent von jedem
+  Umsatz-Euro als Gewinn übrig bleiben. Maß für Profitabilität.
+
+---
+
+### Tab 3: Bewertung — KGV und KBV
+
+**KGV (Kurs-Gewinn-Verhältnis):** Kurs ÷ Gewinn je Aktie — wie viele Jahresgewinne
+kostet die Aktie? Hohe Werte signalisieren hohe Wachstumserwartungen (oder
+Überbewertung), niedrige das Gegenteil. Die historische Zeitreihe zeigt, ob eine
+Aktie relativ zu ihrer eigenen Vergangenheit teuer oder günstig ist.
+
+Die Berechnung in Python:
 
 ```python
 df_inc["EPS"] = df_inc["Net Income"] / df_inc["Shares (Diluted)"]
@@ -336,36 +245,105 @@ eps_daily = df_inc["EPS_TTM"].reindex(df_prices.index, method="ffill")
 pe = (df_prices["Adj. Close"] / eps_daily).dropna()
 ```
 
-- **Zeile 1 — EPS berechnen:**
-  Earnings per Share = Gewinn pro Aktie = Nettogewinn ÷ Anzahl verwässerter Aktien
+- Zeile 1: EPS je Quartal berechnen
+- Zeile 2: `rolling(4).sum()` = Summe der letzten 4 Quartale (TTM, "Trailing Twelve
+  Months") — glättet die Quartalsschwankungen
+- Zeile 3: `reindex(method="ffill")` dehnt die Quartalswerte auf Tagesbasis aus —
+  ein Wert gilt weiter, bis der nächste kommt
+- Zeile 4: KGV = Tageskurs ÷ EPS
 
-- **Zeile 2 — `.rolling(4).sum()`:**
-  Rollende Summe der letzten 4 Quartale = **TTM** ("Trailing Twelve Months")
-  - Man nimmt den Jahresgewinn, weil Quartale stark schwanken (z.B. mehr Umsatz in Q1 als Q2/Q3 bei Saisongeschäften)
-  - Mit der 12-Monats-Summe glättet sich das aus
-
-- **Zeile 3 — `reindex(method='ffill')`:**
-  - Problem: Quartalsdaten gibt's 4× im Jahr, Kursdaten täglich → wie rechnen?
-  - 'forward fill' = nach vorne ausfüllen: ein Quartalswert von Ende März gilt täglich bis zum nächsten Quartal im Juni
-  - Damit gibt es plötzlich **tagesgenaue EPS-Werte**
-
-- **Zeile 4 — KGV:**
-  Kurs ÷ EPS — Pandas dividiert ganze Spalten gleichzeitig
+**KBV (Kurs-Buchwert-Verhältnis):** Kurs ÷ bilanzielles Eigenkapital je Aktie.
+Ein KBV von 1 bedeutet, der Markt zahlt exakt das bilanzielle Eigenkapital —
+darüber zahlt er einen Aufschlag für erwartete zukünftige Gewinne.
 
 ---
 
+### Tab 4: DCF — der faire Wert einer Aktie
 
-## 🚀 Ausblick
+Der DCF (Discounted Cash Flow) beantwortet die Frage: Was ist das Unternehmen
+"wirklich" wert — unabhängig vom Börsenkurs? Antwort: die Summe aller zukünftigen
+freien Cashflows, abgezinst auf heute, geteilt durch die Aktienanzahl.
 
-Wir sind mit dem Dashboard insgesamt sehr zufrieden:
+Das Herzstück der Berechnung:
 
-- **Übersichtlich** aufgebaut und intuitiv zu bedienen
-- **Aktienvergleich** sowohl kursmäßig (Charts mit Indikatoren) als auch fundamental (Umsatz, Gewinn, KGV/KBV)
-- **Schnell** dank Caching auf zwei Ebenen
+```python
+r = rev
+for y, g in enumerate(growth_rates[:n_years], 1):
+    r *= (1 + g)                            # Umsatz wächst jedes Jahr
+    fcf = r * margin                        # daraus der freie Cashflow
+    pv = fcf / (1 + wacc) ** y              # abgezinst auf heute
 
-Für die Zukunft fänden wir es spannend, das Dashboard noch zu ergänzen — zum Beispiel um:
+tv = last_fcf * (1 + tg) / (wacc - tg)      # Terminal Value (Gordon-Growth)
+pv_tv = tv / (1 + wacc) ** n_years          # ebenfalls abgezinst
 
-- einen **DCF-Rechner** als eigener Tab, mit interaktiver Eingabe von WACC, Terminal Growth und FCF-Marge zur Berechnung eines fairen Aktienwerts
+ev = sum_pv + pv_tv                         # Enterprise Value
+equity = ev - net_debt                      # minus Schulden = Eigenkapitalwert
+fv = equity / shares                        # geteilt durch Aktien = Fair Value
+```
 
+Woher die Werte stammen:
 
+| Wert | Default | Herkunft |
+|---|---|---|
+| Umsatz (TTM) | variiert | berechnet aus SimFin-Daten (letzte 4 Quartale) |
+| FCF-Marge | variiert | berechnet: Durchschnitt der letzten 12 Quartale (SimFin) |
+| Nettoverschuldung, Aktienzahl | variiert | aus der SimFin-Bilanz |
+| WACC | 8,5 % | fest angenommen (Praxiswert für große US-Aktien) |
+| Terminal Growth | 2,5 % | fest angenommen (Inflations-/BIP-Niveau) |
+| Wachstum Jahr 1 / 2 | 6 % / 8 % | fest angenommen, per Slider änderbar |
+| Wachstum Jahr 3–5 | variiert | berechnet: schmilzt als Mittelwert Richtung Terminal Growth ab |
+| Prognosezeitraum | 5 Jahre | fest angenommen |
+
+Die gesamte Rechnung in Kürze:
+
+- Umsatz wächst jährlich um die Wachstumsrate → freier Cashflow = Umsatz × Marge
+- jeder Cashflow wird mit dem WACC auf heute abgezinst
+- der Terminal Value fasst alle Cashflows nach der Prognosephase zusammen
+- Summe = Enterprise Value → minus Nettoschulden = Eigenkapitalwert
+- geteilt durch die Aktienzahl = fairer Wert je Aktie, verglichen mit dem Marktkurs
+
+---
+
+### Tab 5: News
+
+```python
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_company_news(ticker, limit=15):
+    if not _YF_AVAILABLE or not ticker:
+        return []
+    try:
+        raw = yf.Ticker(ticker).news       # direkt von yfinance
+    except Exception:
+        return []
+    ...
+```
+
+- zeigt bis zu 15 aktuelle Schlagzeilen: Titel (verlinkt), Quelle, Zeitstempel
+- Abruf direkt von yfinance, ohne Datenbank — News sind flüchtig, eine dauerhafte
+  Speicherung wäre unnötig
+- 30 Minuten Cache im Arbeitsspeicher (`ttl=1800`), schont das Rate-Limit
+- robust gegen Formatänderungen von yfinance: bei Fehlern leere Liste statt Absturz
+
+---
+
+### Tab 6: DB
+
+- zeigt eine Tabelle aller geladenen Aktien: wann zuletzt aktualisiert, aus
+  welcher Quelle (yfinance oder SimFin)
+- Buttons zum manuellen Neuladen der aktuellen Aktie oder aller Aktien auf einmal
+- der Blick "hinter die Kulissen" der Datenbank, direkt im Dashboard
+
+---
+
+## Fazit
+
+- übersichtliches Werkzeug für Kurs- und Fundamentalanalyse der 100 größten US-Aktien
+- Aktien lassen sich sowohl kurstechnisch (Chart, Indikatoren) als auch fundamental
+  (Umsatz, Gewinn, KGV/KBV, DCF) analysieren und vergleichen
+- schnell dank Caching auf zwei Ebenen (Datenbank + Arbeitsspeicher)
+- die saubere Drei-Schichten-Architektur macht das Projekt robust und leicht erweiterbar
+
+---
+
+## Quellen
 
