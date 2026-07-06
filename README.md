@@ -35,20 +35,19 @@ Datenbank.
           │   database.py    │  (Daten-Layer)                  │
           │  laden · putzen  │                                 │
           └──────────────────┘                                 │
-              ▲            │                                    │
+              │            │                                   │
    ruft auf:  │            │ liest / schreibt                  │  direkt,
-   db.get_    │            ▼                                   │  ohne
+   db.get_    │            │                                   │  ohne
    prices()   │   ┌──────────────────┐                         │  Daten-
               │   │  market_data.db  │  (SQLite-Speicher)      │  Layer
               │   └──────────────────┘                         │
               │                                                │
           ┌──────────────────┐                                 │
-          │   Dashboard.py   │  (Streamlit-Oberfläche)  ◄───────┘
+          │   Dashboard.py   │  (Streamlit-Oberfläche)  ◄──────┘
           │  from database   │
           │  import DB       │
           └──────────────────┘
-                   ▼
-                Browser
+                
 ```
 
 **Wie die Verbindung funktioniert:** Das Dashboard importiert die Datenbank-Klasse
