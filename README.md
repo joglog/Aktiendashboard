@@ -27,16 +27,36 @@ News und Earnings-Daten gehen direkt an das Dashboard, ohne den Umweg über die
 Datenbank.
 
 ```
-   yfinance (Kurse) ── SimFin (Fundamentaldaten)      yfinance (News, Earnings)
-                ▼                                          │
-           database.py   (Daten-Layer)                     │
-                ▼                                          │  direkt,
-          market_data.db  (SQLite-Speicher)                │  ohne Datenbank
-                ▼                                          │
-           Dashboard.py   (Streamlit-Oberfläche)  ◄────────┘
-                ▼
-             Browser
+   yfinance (Kurse)     SimFin (Fundamentaldaten)      yfinance (News, Earnings)
+          └────────┬────────────┘                              │
+                   ▼                                           │
+          ┌──────────────────┐                                 │
+          │   database.py    │  (Daten-Layer)                  │
+          │  laden · putzen  │                                 │
+          └──────────────────┘                                 │
+                   ▲ │                                          │
+    liest/schreibt │ │                                         │  direkt,
+                   │ ▼                                          │  ohne
+          ┌──────────────────┐                                 │  Datenbank
+          │  market_data.db  │  (SQLite-Speicher)              │
+          └──────────────────┘                                 │
+                   ▲                                            │
+                   │  from database import DB                   │
+                   │  db.get_prices() / db.get_fundamentals()   │
+                   │                                            │
+          ┌──────────────────┐                                 │
+          │   Dashboard.py   │  (Streamlit-Oberfläche)  ◄───────┘
+          └──────────────────┘
+                   ▼
+                Browser
 ```
+
+**Wie die Verbindung funktioniert:** Das Dashboard importiert die Datenbank-Klasse
+mit `from database import DB` und ruft dann `db.get_prices()` bzw.
+`db.get_fundamentals()` auf. Der Daten-Layer (`database.py`) liest daraufhin aus der
+`market_data.db` — oder lädt frische Daten aus dem Internet nach und schreibt sie in
+die Datenbank. Das Dashboard spricht also **nie direkt** mit der Datenbank-Datei,
+sondern immer über den Daten-Layer.
 
 **Was jede Schicht macht:**
 
