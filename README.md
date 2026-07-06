@@ -3,7 +3,7 @@
 Interaktives Dashboard zur Analyse der 100 größten US-Aktien (S&P 100), gebaut mit
 Python und Streamlit. Es zeigt Kursverläufe mit technischen Indikatoren,
 Fundamentaldaten, Bewertungskennzahlen, eine DCF-Unternehmensbewertung und aktuelle
-News — mit lokaler Datenbank als Zwischenspeicher.
+News - sowie mit einer lokaler Datenbank als Zwischenspeicher.
 
 ---
 
@@ -11,57 +11,58 @@ News — mit lokaler Datenbank als Zwischenspeicher.
 
 | Bereich | Tool |
 |---|---|
-| Sprache | Python 3.10+ |
-| Web-UI | [Streamlit](https://streamlit.io) |
-| Diagramme | [Plotly](https://plotly.com/python/) |
+| Sprache | Python  |
+| Web-UI | Streamlit |
+| Diagramme | Plotly |
 | Datenanalyse | pandas, NumPy |
-| Datenbank | SQLite (in einer einzigen `.db`-Datei) |
-| Datenquellen | [yfinance](https://github.com/ranaroussi/yfinance), [SimFin](https://simfin.com) |
+| Datenbank | SQLite |
+| Datenquellen | yfinance, SimFin |
 
 ---
 
 ## Architektur
 
-Das Projekt folgt einer **Drei-Schichten-Architektur** — mit einer Besonderheit:
-News und Earnings-Daten gehen direkt an das Dashboard, ohne den Umweg über die
-Datenbank.
+**Drei-Schichten-Architektur**:
+jede Schicht mit klaren Aufgaben
 
 ```
-   yfinance (Kurse)     SimFin (Fundamentaldaten)      yfinance (News, Earnings)
+   yfinance (Kursdaten)     SimFin (Fundamentaldaten)      yfinance (News, Earnings)
           └────────┬────────────┘                              │
-                   │ lädt & speichert                          │
+                   │                                           │
                    ▼                                           │
           ┌──────────────────┐                                 │
-          │   database.py    │  (Daten-Layer)                  │
-          │  laden · putzen  │                                 │
+          │   database.py    │                                 │
+          │  (Daten- Layer)  │                                 │
           └──────────────────┘                                 │
               │            │                                   │
-   ruft auf:  │            │ liest / schreibt                  │  direkt,
-   db.get_    │            │                                   │  ohne
-   prices()   │   ┌──────────────────┐                         │  Daten-
-              │   │  market_data.db  │  (SQLite-Speicher)      │  Layer
+              │            │                                   │  direkt,
+              │            │                                   │  ohne
+              │   ┌──────────────────┐                         │  Daten-
+              │   │  market_data.db  │                         │  Layer
+              │   │ (SQLite-Speicher)│                         │                           
               │   └──────────────────┘                         │
               │                                                │
           ┌──────────────────┐                                 │
-          │   Dashboard.py   │  (Streamlit-Oberfläche)  ◄──────┘
-          │  from database   │
-          │  import DB       │
+          │   Dashboard.py   │  ◄──────────────────────────────┘
+          │  (Streamlit-     │
+          │    Oberfläche    │
           └──────────────────┘
                 
 ```
 
-**Wie die Verbindung funktioniert:** Das Dashboard importiert die Datenbank-Klasse
+**Wie die Verbindung funktioniert:** 
+- Das Dashboard importiert die Datenbank-Klasse
 mit `from database import DB` und ruft dann `db.get_prices()` bzw.
 `db.get_fundamentals()` auf. Der Daten-Layer (`database.py`) liest daraufhin aus der
 `market_data.db` — oder lädt frische Daten aus dem Internet nach und schreibt sie in
 die Datenbank. Das Dashboard spricht also **nie direkt** mit der Datenbank-Datei,
 sondern immer über den Daten-Layer.
 
-**Was jede Schicht macht:**
+**Funktionen der Schichten:**
 
-- `database.py` → beschafft Kurse und Fundamentaldaten, bereinigt sie und speichert sie
-- `market_data.db` → hält alle Kurse und Fundamentaldaten dauerhaft fest
-- `Dashboard.py` → berechnet Kennzahlen, zeichnet Diagramme, zeigt alles an
+- `database.py` → Beschaffung und Aufbereitung von Kurs- und Fundamentaldaten
+- `market_data.db` → dauerhafte Speicherung von Kurs- und Fundamentaldaten
+- `Dashboard.py` → Visualisierungen und Berechnungen dieser Daten
 
 **Zwei Datenwege:**
 
