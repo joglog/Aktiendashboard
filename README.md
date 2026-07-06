@@ -81,15 +81,15 @@ jede Schicht mit klaren Aufgaben
 Verbindung des Datenlayers mit Datenbank und Dashboard:
 
 ```python
-#In Dashboard.py → Verbindung zum Datenlayer über die Klasse DB (von dort aus dann zur Datenbank):
+#In Dashboard.py: Verbindung zum Datenlayer über die Klasse DB (von dort aus dann zur Datenbank):
 from database import DB
 
 @st.cache_resource
 def get_db():
-    return DB()          #Verbindung zu Datenbank über Datenlayer wird nur einmal aufgebaut
+    return DB()          # Verbindung zu Datenbank über Datenlayer wird nur einmal aufgebaut
 db = get_db()
 
-#Abrufen der Kurs- und Fundamentaldaten über den Datenlayer:
+# Abrufen der Kurs- und Fundamentaldaten über den Datenlayer:
 df = db.get_prices(ticker)
 fund = db.get_fundamentals(ticker)
 ```
@@ -103,12 +103,12 @@ fund = db.get_fundamentals(ticker)
 
 **Das Hauptproblem: yfinance-Rate-Limits**
 
-- yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
+- yfinance als **inoffizielle** Schnittstelle zu Yahoo Finance
 - Yahoo blockiert bei zu vielen Anfragen
 - Dagegen gibt es folgende Schutzmechanismen:
 
 
-**Schutz 1 — Throttling (Pause zwischen Anfragen)**
+**Schutz 1 - Throttling (Pause zwischen Anfragen)**
 
 ```python
 YF_THROTTLE_SECONDS = 2.0   # Pause zwischen yfinance-Calls
@@ -125,7 +125,7 @@ def _throttle_yf(cls):
 - So werden zu viele Anfragen auf einmal verhindert
 
 
-**Schutz 2 — Fallback yfinance ↔ SimFin**
+**Schutz 2 - Fallback yfinance ↔ SimFin**
 
 ```python
 def refresh_prices(self, ticker: str, force: bool = False) -> bool:
@@ -141,7 +141,7 @@ def refresh_prices(self, ticker: str, force: bool = False) -> bool:
 - SimFin hat zwar kürzere Historie (~5 Jahre), aber keine Rate-Limits
 
 
-**Schutz 3 — TTL-Logik (Daten nur nachladen, wenn veraltet)**
+**Schutz 3 - TTL-Logik**
 
 ```python
 PRICE_TTL_DAYS = 1          # Preise täglich aktualisieren
