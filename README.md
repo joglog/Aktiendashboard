@@ -66,7 +66,7 @@ jede Schicht mit klaren Aufgaben
           ┌──────────────────┐                                 │
           │   Dashboard.py   │  ◄──────────────────────────────┘
           │  (Streamlit-     │
-          │    Oberfläche    │
+          │    Oberfläche)   │
           └──────────────────┘
                 
 ```
