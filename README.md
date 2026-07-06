@@ -214,45 +214,36 @@ tab1, tab2, tab3, tab4, tab_news, tab5 = st.tabs([
 
 ### Tab 1: Chart — die Indikatoren kurz erklärt
 
-- **SMA (Simple Moving Average):** Durchschnitt der letzten N Schlusskurse
-  (20/50/100/200 Tage). Glättet Schwankungen und macht den Trend sichtbar.
-- **RSI (Relative Strength Index):** Skala 0–100, misst die Stärke der Gewinn-
-  gegenüber den Verlust-Tagen der letzten 14 Tage. Über 70 überkauft, unter 30 überverkauft.
-- **MACD:** Differenz zweier exponentieller Durchschnitte (12/26 Tage). Kreuzt die
-  MACD-Linie ihre Signal-Linie nach oben, gilt das als Kaufsignal.
+- **SMA (Simple Moving Average):** Durchschnitt der letzten N Schlusskurse (20/50/100/200 Tage)
+  - hilft bei der Trendidentifikation
+- **RSI (Relative Strength Index):** misst die Stärke der Gewinn- gegenüber den Verlust-Tagen der letzten 14 Tage über eine Skala von 0-100
+  - Über 70 gilt Aktie als überkauft, unter 30 als überverkauft
+- **MACD:** Differenz zweier exponentieller Durchschnitte (12/26 Tage)
+  - Kreuzt die MACD-Linie ihre Signal-Linie nach oben, gilt das als Kaufsignal, andersrum als Verkaufsignal
 - **Volumen:** gehandelte Stückzahl pro Tag, optional mit 20-Tage-Durchschnitt.
 
-Performance-Kennzahlen oberhalb des Charts:
 
-- **CAGR:** (Compound annual growth rate) durchschnittliche jährliche Rendite, geometrisch berechnet
-- **Volatilität:** annualisierte Schwankungsbreite der Tagesrenditen
-- **Beta:** Sensitivität zum Benchmark (1 = bewegt sich wie der Markt)
-- **Alpha:** risikobereinigte Überrendite gegenüber dem Benchmark
-
-Ereignis-Marker (zuschaltbar, unten am Chart):
+Ereignis-Marker
 
 - **Earnings-Termine:** grün = Gewinnerwartung übertroffen, rot = verfehlt
-  (Details im Tooltip; Quelle: yfinance, ca. letzte 2 Jahre)
-- **Markt-Ereignisse:** 12 kuratierte Ereignisse (Corona, Fed-Zinswende, Wahlen,
-  ChatGPT-Start), farbig nach Kategorie, Beschreibung im Tooltip
+- **Markt-Ereignisse:** 12 wichtige Ereignisse in den letzten Jahren (z.B. Corona, Fed-Zinswende, Wahlen, ChatGPT-Start), farbig nach Kategorie
 
 ---
 
 ### Tab 2: Fundamentals — EPS und Nettomarge
 
-- **EPS (Earnings per Share):** Gewinn pro Aktie = Nettogewinn ÷ Anzahl
-  verwässerter Aktien
-- **Nettomarge:** Nettogewinn ÷ Umsatz × 100 — wie viele Cent von jedem
-  Umsatz-Euro als Gewinn übrig bleiben. Maß für Profitabilität.
+- **EPS (Earnings per Share):** Gewinn pro Aktie = Nettogewinn ÷ Anzahl der verwässerter Aktien
+- **Nettomarge:** Nettogewinn ÷ Umsatz × 100
+  - Maß für Profitabilität.
 
 ---
 
 ### Tab 3: Bewertung — KGV und KBV
 
-**KGV (Kurs-Gewinn-Verhältnis):** Kurs ÷ Gewinn je Aktie — wie viele Jahresgewinne
-kostet die Aktie? Hohe Werte signalisieren hohe Wachstumserwartungen (oder
-Überbewertung), niedrige das Gegenteil. Die historische Zeitreihe zeigt, ob eine
-Aktie relativ zu ihrer eigenen Vergangenheit teuer oder günstig ist.
+**KGV (Kurs-Gewinn-Verhältnis):** Kurs ÷ Gewinn je Aktie 
+— wie viele Jahresgewinne zahlt man für die Aktie
+  - Hohe Werte signalisieren hohe Wachstumserwartungen (oder Überbewertung) und niedrige das Gegenteil
+- historische Zeitreihe zeigt, ob eine Aktie relativ zu ihrer eigenen Vergangenheit teuer oder günstig ist.
 
 Die Berechnung in Python:
 
@@ -265,33 +256,28 @@ pe = (df_prices["Adj. Close"] / eps_daily).dropna()
 
 - Zeile 1: EPS je Quartal berechnen
 - Zeile 2: `rolling(4).sum()` = Summe der letzten 4 Quartale (TTM, "Trailing Twelve
-  Months") — glättet die Quartalsschwankungen
-- Zeile 3: `reindex(method="ffill")` dehnt die Quartalswerte auf Tagesbasis aus —
-  ein Wert gilt weiter, bis der nächste kommt
+  Months")
+- Zeile 3: `reindex(method="ffill")` -> ein Wert gilt, bis der nächste kommt
 - Zeile 4: KGV = Tageskurs ÷ EPS
 
-**KBV (Kurs-Buchwert-Verhältnis):** Kurs ÷ bilanzielles Eigenkapital je Aktie.
-Ein KBV von 1 bedeutet, der Markt zahlt exakt das bilanzielle Eigenkapital —
-darüber zahlt er einen Aufschlag für erwartete zukünftige Gewinne.
+**KBV (Kurs-Buchwert-Verhältnis):** Kurs ÷ Buchwert je Aktie
+- KBV von 1 bedeutet, der Markt zahlt exakt den Buchwert des Unternehmens, darüber zahlt er einen Aufschlag für erwartete zukünftige Gewinne.
 
 ---
 
-### Tab 4: DCF — der faire Wert einer Aktie
+### Tab 4: Discounted-Cashflow-Modell
 
-Der DCF (Discounted Cash Flow) beantwortet die Frage: Was ist das Unternehmen
-"wirklich" wert — unabhängig vom Börsenkurs? Antwort: die Summe aller zukünftigen
-freien Cashflows, abgezinst auf heute, geteilt durch die Aktienanzahl.
+- DCF (Discounted Cash Flow) versucht über die zukünftigen abgezinsten Cashflows einen fairen Wert der Aktie zu bilden
 
-Das Herzstück der Berechnung:
 
 ```python
 r = rev
 for y, g in enumerate(growth_rates[:n_years], 1):
     r *= (1 + g)                            # Umsatz wächst jedes Jahr
-    fcf = r * margin                        # daraus der freie Cashflow
-    pv = fcf / (1 + wacc) ** y              # abgezinst auf heute
+    fcf = r * margin                        # daraus der freie Cashflow über die FCF-Margin von letzten 12 Monaten
+    pv = fcf / (1 + wacc) ** y              # abgezinst auf heute über den WACC
 
-tv = last_fcf * (1 + tg) / (wacc - tg)      # Terminal Value (Gordon-Growth)
+tv = last_fcf * (1 + tg) / (wacc - tg)      # Terminal Value berechnet über eine feste Wachstumsrate von 2,5%
 pv_tv = tv / (1 + wacc) ** n_years          # ebenfalls abgezinst
 
 ev = sum_pv + pv_tv                         # Enterprise Value
@@ -301,18 +287,18 @@ fv = equity / shares                        # geteilt durch Aktien = Fair Value
 
 Woher die Werte stammen:
 
-| Wert | Default | Herkunft |
+| Wert | Annahme | Herkunft |
 |---|---|---|
-| Umsatz (TTM) | variiert | berechnet aus SimFin-Daten (letzte 4 Quartale) |
-| FCF-Marge | variiert | berechnet: Durchschnitt der letzten 12 Quartale (SimFin) |
+| Umsatz (TTM) | variiert | berechnet aus SimFin-Daten über letzte 4 Quartale |
+| FCF-Marge | variiert | berechnet über den Durchschnitt der letzten 12 Quartale (SimFin) |
 | Nettoverschuldung, Aktienzahl | variiert | aus der SimFin-Bilanz |
-| WACC | 8,5 % | fest angenommen (Praxiswert für große US-Aktien) |
-| Terminal Growth | 2,5 % | fest angenommen (Inflations-/BIP-Niveau) |
-| Wachstum Jahr 1 / 2 | 6 % / 8 % | fest angenommen, per Slider änderbar |
-| Wachstum Jahr 3–5 | variiert | berechnet: schmilzt als Mittelwert Richtung Terminal Growth ab |
+| WACC | 8,5 % | fest angenommen (üblich für große US-Aktien) |
+| Terminal Growth | 2,5 % | fest angenommen (übliches Niveau) |
+| Wachstum Jahr 1 / 2 | 6 % / 5 % | fest angenommen |
+| Wachstum Jahr 3–5 | variiert | berechnet-> sinkt als Mittelwert jährlich Richtung Terminal Growth |
 | Prognosezeitraum | 5 Jahre | fest angenommen |
 
-Die gesamte Rechnung in Kürze:
+Zusammengefasst:
 
 - Umsatz wächst jährlich um die Wachstumsrate → freier Cashflow = Umsatz × Marge
 - jeder Cashflow wird mit dem WACC auf heute abgezinst
