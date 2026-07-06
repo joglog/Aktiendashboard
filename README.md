@@ -222,11 +222,11 @@ tab1, tab2, tab3, tab4, tab_news, tab5 = st.tabs([
   gegenüber den Verlust-Tagen der letzten 14 Tage. Über 70 überkauft, unter 30 überverkauft.
 - **MACD:** Differenz zweier exponentieller Durchschnitte (12/26 Tage). Kreuzt die
   MACD-Linie ihre Signal-Linie nach oben, gilt das als Kaufsignal.
-- **Volumen:** gehandelte Stückzahl pro Tag, optional mit 20-Tage-Durchschnitt.
+- **Volumen:** gehandelte Stückzahl pro Tag, optional gibt es auch einen 20-Tage-Durchschnitt.
 
 Performance-Kennzahlen oberhalb des Charts:
 
-- **CAGR:** durchschnittliche jährliche Rendite, geometrisch berechnet
+- **CAGR:** (Compound annual growth rate) durchschnittliche jährliche Rendite, geometrisch berechnet
 - **Volatilität:** annualisierte Schwankungsbreite der Tagesrenditen
 - **Beta:** Sensitivität zum Benchmark (1 = bewegt sich wie der Markt)
 - **Alpha:** risikobereinigte Überrendite gegenüber dem Benchmark
