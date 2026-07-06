@@ -294,7 +294,7 @@ Woher die Werte stammen:
 | Nettoverschuldung, Aktienzahl | variiert | aus der SimFin-Bilanz |
 | WACC | 8,5 % | fest angenommen (üblich für große US-Aktien) |
 | Terminal Growth | 2,5 % | fest angenommen (übliches Niveau) |
-| Wachstum Jahr 1 / 2 | 6 % / 5 % | fest angenommen |
+| Wachstum Jahr 1 / 2 | 7 % / 6 % | fest angenommen |
 | Wachstum Jahr 3–5 | variiert | berechnet-> sinkt als Mittelwert jährlich Richtung Terminal Growth |
 | Prognosezeitraum | 5 Jahre | fest angenommen |
 
@@ -303,6 +303,7 @@ Zusammengefasst:
 - Umsatz wächst jährlich um die Wachstumsrate → freier Cashflow = Umsatz × Marge
 - jeder Cashflow wird mit dem WACC auf heute abgezinst
 - der Terminal Value fasst alle Cashflows nach der Prognosephase zusammen
+- Summe aus auf heute abgezinsten Cashflows in und Cashflows nach der Prognosephase
 - Summe = Enterprise Value → minus Nettoschulden = Eigenkapitalwert
 - geteilt durch die Aktienzahl = fairer Wert je Aktie, verglichen mit dem Marktkurs
 
@@ -322,32 +323,28 @@ def get_company_news(ticker, limit=15):
     ...
 ```
 
-- zeigt bis zu 15 aktuelle Schlagzeilen: Titel (verlinkt), Quelle, Zeitstempel
-- Abruf direkt von yfinance, ohne Datenbank — News sind flüchtig, eine dauerhafte
-  Speicherung wäre unnötig
-- 30 Minuten Cache im Arbeitsspeicher (`ttl=1800`), schont das Rate-Limit
-- robust gegen Formatänderungen von yfinance: bei Fehlern leere Liste statt Absturz
+- zeigt 10 aktuelle Schlagzeilen: Titel, Link, Quelle und Veröffentlichungsdatum
+- Abruf direkt von yfinance, ohne Datenbank, da historische News nicht relevant sind und sich schnell ändern
+- 30 Minuten Cache im Arbeitsspeicher (`ttl=1800`) -> schont das Rate-Limit
 
 ---
 
 ### Tab 6: DB
 
-- zeigt eine Tabelle aller geladenen Aktien: wann zuletzt aktualisiert, aus
-  welcher Quelle (yfinance oder SimFin)
+- zeigt eine Tabelle aller geladenen Aktien: letztes Aktualisierungsdatum und Datenquelle (yfinance oder SimFin)
 - Buttons zum manuellen Neuladen der aktuellen Aktie oder aller Aktien auf einmal
-- der Blick "hinter die Kulissen" der Datenbank, direkt im Dashboard
+
 
 ---
 
 ## Fazit
 
 - übersichtliches Werkzeug für Kurs- und Fundamentalanalyse der 100 größten US-Aktien
-- Aktien lassen sich sowohl kurstechnisch (Chart, Indikatoren) als auch fundamental
-  (Umsatz, Gewinn, KGV/KBV, DCF) analysieren und vergleichen
-- schnell dank Caching auf zwei Ebenen (Datenbank + Arbeitsspeicher)
-- die saubere Drei-Schichten-Architektur macht das Projekt robust und leicht erweiterbar
+- Aktien lassen sich sowohl kurstechnisch über den Chart und Indikatoren als auch fundamental
+  (Umsatz, Gewinn, KGV/KBV, DCF) analysieren und historisch bzw. mit anderen Aktien vergleichen
+- DCF-Modell dient eher als interaktives Werkzeug, um mit eigenen Annahmen eine Aktie zu bewerten (Annahmen sind veränderbar)
 
 ---
 
 ## Quellen
-
+Nutzung von Claude.ai zur Erstellung des Readme und des Python-Codes zur besseren Umsetzung eigener Ideen
