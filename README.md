@@ -11,8 +11,8 @@ News - sowie mit einer lokaler Datenbank als Zwischenspeicher.
 ### 1. Repository klonen
 
 ```bash
-git clone https://github.com/<joglog>/<Dashboard>.git
-cd <joglog/dashboard>
+git clone https://github.com/joglog/Aktiendashboard.git
+cd Aktiendashboard
 ```
 
 ### 2. Abhängigkeiten installieren
