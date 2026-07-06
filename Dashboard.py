@@ -2,8 +2,8 @@
 """
 S&P 100 Dashboard (SimFin + yfinance + SQLite)
 100 größte US-Aktien aus dem S&P 100 Index
-Tabs: Chart · Fundamentals · Bewertung · DB-Status
-Start: streamlit run Dashboard_SP100_ohneDCF.py
+Tabs: Chart · Fundamentals · Bewertung · DCF · DB-Status
+Start: streamlit run Dashboard_SP100.py
 """
 
 import numpy as np
@@ -13,6 +13,13 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from database import DB, BENCHMARK_TICKERS
+
+# yfinance für Earnings-Surprise-Daten (optional — Dashboard läuft auch ohne)
+try:
+    import yfinance as yf
+    _YF_AVAILABLE = True
+except ImportError:
+    _YF_AVAILABLE = False
 
 # ============================================================
 # SETUP
@@ -156,6 +163,36 @@ SMA_COLORS = {20: "#ff9800", 50: "#2196f3", 100: "#9c27b0", 200: "#f44336"}
 COLOR_A = "#1f77b4"
 COLOR_B = "#ff7f0e"
 
+# Kuratierte Markt-Ereignisse: (Datum, Beschreibung, Kategorie).
+# Kategorie bestimmt die Farbe. Tooltip zeigt die Beschreibung.
+# Bewusst wenige, dafür markante Ereignisse — übersichtlicher als alle Fed-Termine.
+MARKET_EVENTS = [
+    # --- Krisen / Geopolitik (rot) ---
+    ("2020-02-19", "S&P 500 Allzeithoch vor Corona", "krise"),
+    ("2020-03-23", "Corona-Crash Tiefpunkt", "krise"),
+    ("2022-02-24", "Russischer Angriff auf die Ukraine", "krise"),
+    ("2022-10-12", "Bärenmarkt-Tiefpunkt 2022", "krise"),
+    ("2023-10-07", "Hamas-Angriff auf Israel", "krise"),
+    # --- Geldpolitik / Wirtschaft (blau) ---
+    ("2020-03-15", "Fed-Notfallsenkung auf 0 % (Corona)", "fed"),
+    ("2022-03-16", "Fed-Zinswende: erste Erhöhung", "fed"),
+    ("2022-06-15", "Fed +0,75 %: größte Erhöhung seit 1994", "fed"),
+    ("2024-09-18", "Fed: erste Zinssenkung seit 2020", "fed"),
+    # --- Politik (grün) ---
+    ("2020-11-03", "US-Präsidentschaftswahl (Biden)", "politik"),
+    ("2024-11-05", "US-Präsidentschaftswahl (Trump)", "politik"),
+    # --- Tech / Markt-Meilensteine (lila) ---
+    ("2022-11-30", "ChatGPT-Launch — Start des KI-Booms", "tech"),
+]
+
+# Farben je Ereignis-Kategorie
+EVENT_COLORS = {
+    "krise": "#e53935",    # rot
+    "fed": "#1565c0",      # blau
+    "politik": "#43a047",  # grün
+    "tech": "#8e24aa",     # lila
+}
+
 # ============================================================
 # STYLING
 # ============================================================
@@ -200,6 +237,119 @@ def get_fundamentals(ticker):
     except Exception as e:
         empty["error"] = f"DB-Fehler: {e}"
         return empty
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_earnings_surprises(ticker):
+    """Holt Earnings-Termine mit Erwartung vs. tatsächlichem EPS über yfinance.
+    Returns: Liste von (datum, label, beat)-Tupeln.
+      beat = True  → Reported EPS >= Estimate (Erwartung übertroffen, grün)
+      beat = False → verfehlt (rot)
+      beat = None  → keine Surprise-Daten (neutral)
+    Bei fehlendem yfinance oder Fehler: leere Liste.
+    """
+    if not _YF_AVAILABLE or not ticker:
+        return []
+    try:
+        t = yf.Ticker(ticker)
+        df = t.get_earnings_dates(limit=24)
+        if df is None or df.empty:
+            return []
+    except Exception:
+        return []
+
+    events = []
+    for date, row in df.iterrows():
+        try:
+            d = pd.to_datetime(date).tz_localize(None)
+        except Exception:
+            try:
+                d = pd.to_datetime(date)
+            except Exception:
+                continue
+        est = row.get("EPS Estimate")
+        rep = row.get("Reported EPS")
+        surprise = row.get("Surprise(%)")
+        # beat bestimmen
+        beat = None
+        if pd.notna(est) and pd.notna(rep):
+            beat = bool(rep >= est)
+        # Label für Tooltip bauen
+        parts = []
+        if pd.notna(rep):
+            parts.append(f"Ist: {rep:.2f}")
+        if pd.notna(est):
+            parts.append(f"Erw.: {est:.2f}")
+        if pd.notna(surprise):
+            parts.append(f"Überraschung: {surprise:+.1f}%")
+        label = " · ".join(parts) if parts else "Earnings"
+        events.append((d, label, beat))
+    return events
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_company_news(ticker, limit=15):
+    """Holt aktuelle News zur Aktie über yfinance.
+    Das News-Format von yfinance variiert je nach Version — teils liegen die
+    Felder direkt im Dict, teils verschachtelt unter 'content'. Diese Funktion
+    behandelt beide Fälle robust.
+    Returns: Liste von Dicts mit title, publisher, link, timestamp (oder leere Liste).
+    """
+    if not _YF_AVAILABLE or not ticker:
+        return []
+    try:
+        raw = yf.Ticker(ticker).news
+        if not raw:
+            return []
+    except Exception:
+        return []
+
+    items = []
+    for art in raw[:limit]:
+        # Variante A (älteres Format): Felder direkt im Dict
+        # Variante B (neueres Format): unter art["content"]
+        content = art.get("content", art)
+
+        title = content.get("title") or art.get("title") or ""
+        if not title:
+            continue
+
+        # Publisher: verschiedene mögliche Pfade
+        publisher = ""
+        prov = content.get("provider") or {}
+        if isinstance(prov, dict):
+            publisher = prov.get("displayName", "")
+        if not publisher:
+            publisher = art.get("publisher", "")
+
+        # Link: verschiedene mögliche Pfade
+        link = ""
+        cu = content.get("canonicalUrl") or {}
+        if isinstance(cu, dict):
+            link = cu.get("url", "")
+        if not link:
+            link = content.get("clickThroughUrl", {}).get("url", "") \
+                if isinstance(content.get("clickThroughUrl"), dict) else ""
+        if not link:
+            link = art.get("link", "")
+
+        # Zeitstempel: entweder Unix-Zahl oder ISO-String
+        ts = None
+        pub_date = content.get("pubDate") or content.get("displayTime")
+        if pub_date:
+            try:
+                ts = pd.to_datetime(pub_date)
+            except Exception:
+                ts = None
+        if ts is None:
+            unix = art.get("providerPublishTime")
+            if unix:
+                try:
+                    ts = pd.to_datetime(unix, unit="s")
+                except Exception:
+                    ts = None
+
+        items.append({"title": title, "publisher": publisher,
+                      "link": link, "timestamp": ts})
+    return items
 
 # ============================================================
 # HELFER
@@ -283,11 +433,95 @@ def prep_fundamentals(df_inc):
     df["NetMargin"] = df["Net Income"] / df["Revenue"] * 100
     return df.dropna(subset=["Revenue_Bn", "NetIncome_Bn", "EPS"])
 
+def compute_dcf_inputs(fund, df_prices):
+    diag = {"missing": []}
+    if not fund["available"]:
+        diag["missing"].append("Income Statements fehlen")
+    if fund["cashflow"] is None:
+        diag["missing"].append("Cash Flow fehlt")
+    if fund["balance"] is None:
+        diag["missing"].append("Balance Sheet fehlt")
+    if diag["missing"]:
+        return None, diag
+
+    df_inc = fund["income"].copy()
+    df_bs = fund["balance"]
+    df_cf = fund["cashflow"].copy()
+
+    ocf_col = next((c for c in ["Net Cash from Operating Activities",
+                                "Cash from Operations"] if c in df_cf.columns), None)
+    capex_col = next((c for c in ["Change in Fixed Assets & Intangibles",
+                                  "Capital Expenditures"] if c in df_cf.columns), None)
+    if ocf_col is None:
+        diag["missing"].append("OCF-Spalte nicht gefunden")
+        return None, diag
+
+    df_cf["FCF"] = df_cf[ocf_col].fillna(0)
+    if capex_col:
+        df_cf["FCF"] += df_cf[capex_col].fillna(0)
+
+    df_inc["Revenue_TTM"] = df_inc["Revenue"].rolling(4).sum()
+    df_cf["FCF_TTM"] = df_cf["FCF"].rolling(4).sum()
+
+    combined = pd.DataFrame({"Rev": df_inc["Revenue_TTM"],
+                             "FCF": df_cf["FCF_TTM"]}).dropna()
+    if len(combined) < 4:
+        diag["missing"].append("Zu wenige TTM-Quartale")
+        return None, diag
+
+    combined["Margin"] = combined["FCF"] / combined["Rev"]
+    avg_margin = combined["Margin"].tail(12).mean()
+    rev_current = df_inc["Revenue_TTM"].dropna().iloc[-1]
+
+    if pd.isna(rev_current) or rev_current <= 0:
+        diag["missing"].append("Aktueller TTM-Umsatz ungültig")
+        return None, diag
+
+    last_bs = df_bs.iloc[-1]
+    ltd = safe_get(last_bs, "Long Term Debt", "Long Term Borrowings")
+    std = safe_get(last_bs, "Short Term Debt", "Short Term Borrowings")
+    cash = safe_get(last_bs, "Cash, Cash Equivalents & Short Term Investments",
+                    "Cash and Cash Equivalents")
+    net_debt = ltd + std - cash
+
+    shares = df_inc["Shares (Diluted)"].dropna()
+    if shares.empty:
+        diag["missing"].append("Aktien nicht verfügbar")
+        return None, diag
+    shares = float(shares.iloc[-1])
+
+    price = get_current_price(df_prices)
+    if price is None:
+        diag["missing"].append("Kein aktueller Kurs")
+        return None, diag
+
+    return {"avg_fcf_margin": avg_margin, "rev_current": rev_current,
+            "net_debt": net_debt, "shares": shares, "current_price": price}, diag
+
+def run_dcf(rev, growth_rates, margin, wacc, tg, n_years, net_debt, shares, price):
+    rows = []
+    r = rev
+    for y, g in enumerate(growth_rates[:n_years], 1):
+        r *= (1 + g)
+        fcf = r * margin
+        rows.append({"Jahr": y, "Revenue": r, "FCF": fcf,
+                     "PV_FCF": fcf / (1 + wacc) ** y})
+    df_proj = pd.DataFrame(rows).set_index("Jahr")
+    tv = df_proj["FCF"].iloc[-1] * (1 + tg) / (wacc - tg)
+    pv_tv = tv / (1 + wacc) ** n_years
+    sum_pv = df_proj["PV_FCF"].sum()
+    ev = sum_pv + pv_tv
+    equity = ev - net_debt
+    fv = equity / shares if shares > 0 else 0
+    upside = (fv / price - 1) * 100 if price > 0 else 0
+    return {"proj": df_proj, "pv_tv": pv_tv, "sum_pv": sum_pv,
+            "ev": ev, "equity": equity, "fv": fv, "upside": upside}
+
 # ============================================================
 # CHARTS
 # ============================================================
 def make_main_chart(df, name, smas, vol, avg_vol, rsi, macd,
-                    bench=None, bench_name=None):
+                    bench=None, bench_name=None, earnings=None, events=None):
     extra = sum([vol, rsi, macd])
     rows = 1 + extra
     rh = [0.55] + [(1 - 0.55) / extra] * extra if extra > 0 else [1.0]
@@ -356,6 +590,67 @@ def make_main_chart(df, name, smas, vol, avg_vol, rsi, macd,
                       hovermode="x unified",
                       legend=dict(orientation="h", y=1.02, x=1, xanchor="right"),
                       margin=dict(l=40, r=40, t=40, b=40))
+    # Vertikale Orientierungslinie am Cursor (gestrichelt) — erscheint beim Hover
+    # und verschwindet beim Weggehen. Hilft, Ereignisse im Kursverlauf zu verorten.
+    fig.update_xaxes(showspikes=True, spikemode="across", spikesnap="cursor",
+                     spikedash="dash", spikecolor="#888", spikethickness=1)
+    # Datumsbeschriftung direkt unter den Hauptchart (row 1) setzen, statt nur
+    # ganz unten unter den Indikatoren. Nötig, weil shared_xaxes die Labels sonst
+    # nur beim untersten Subplot zeigt.
+    if extra > 0:
+        fig.update_xaxes(showticklabels=True, row=1, col=1)
+
+    # --- Earnings-Marker: grün = Erwartung übertroffen, rot = verfehlt ---
+    # Position der Marker-Reihen ganz unten im Kurs-Panel (knapp über der Achse)
+    price_min = float(df["Low"].min())
+    price_max = float(df["High"].max())
+    span = price_max - price_min
+    y_events = price_min - span * 0.02   # unterste Reihe: Ereignisse
+    y_earn = price_min - span * 0.06     # knapp darunter: Earnings
+
+    # --- Earnings-Marker: grün = übertroffen, rot = verfehlt (unten am Chart) ---
+    if earnings:
+        idx_min = pd.Timestamp(df.index.min()).tz_localize(None)
+        idx_max = pd.Timestamp(df.index.max()).tz_localize(None)
+        e_x, e_color, e_text = [], [], []
+        for date, label, beat in earnings:
+            date = pd.Timestamp(date).tz_localize(None)
+            if date < idx_min or date > idx_max:
+                continue
+            color = "#26a69a" if beat else ("#ef5350" if beat is False else "#9c27b0")
+            status = "übertroffen" if beat else ("verfehlt" if beat is False else "—")
+            e_x.append(date)
+            e_color.append(color)
+            e_text.append(f"📊 Earnings ({status})<br>{label}")
+        if e_x:
+            fig.add_trace(go.Scatter(
+                x=e_x, y=[y_earn] * len(e_x), mode="markers", name="Earnings",
+                marker=dict(symbol="diamond", size=12, color=e_color,
+                            line=dict(width=1.5, color="white")),
+                text=e_text, hoverinfo="text", showlegend=False,
+            ), row=1, col=1)
+
+    # --- Markt-Ereignisse: farbig nach Kategorie (unten am Chart) ---
+    if events:
+        idx_min = pd.Timestamp(df.index.min()).tz_localize(None)
+        idx_max = pd.Timestamp(df.index.max()).tz_localize(None)
+        v_x, v_color, v_text = [], [], []
+        for date_str, desc, cat in events:
+            date = pd.to_datetime(date_str).tz_localize(None)
+            if date < idx_min or date > idx_max:
+                continue
+            color = EVENT_COLORS.get(cat, "#607d8b")
+            v_x.append(date)
+            v_color.append(color)
+            v_text.append(f"◆ {desc}")
+        if v_x:
+            fig.add_trace(go.Scatter(
+                x=v_x, y=[y_events] * len(v_x), mode="markers", name="Ereignis",
+                marker=dict(symbol="diamond", size=15, color=v_color,
+                            line=dict(width=1.5, color="white")),
+                text=v_text, hoverinfo="text", showlegend=False,
+            ), row=1, col=1)
+
     fig.update_yaxes(title_text="Preis", row=1, col=1)
     return fig
 
@@ -418,7 +713,7 @@ def make_valuation_chart(pe_a, pb_a, name_a, pe_b=None, pb_b=None, name_b=None):
                   row=1, col=1)
     fig.add_trace(go.Scatter(x=pb_a.index, y=pb_a, name=name_a,
                              line=dict(color=COLOR_A if compare else "#00897b", width=1.6),
-                             showlegend=compare),
+                             showlegend=False),
                   row=2, col=1)
     if not compare:
         fig.add_hline(y=pe_a.mean(), line_dash="dash", line_color="red",
@@ -470,13 +765,22 @@ with st.sidebar:
                                  "Trendfolge-Indikator: MACD-Linie kreuzt "
                                  "Signal-Linie nach oben = Kaufsignal, "
                                  "nach unten = Verkaufssignal.")
+    show_earnings = st.checkbox("Earnings (mit Überraschung)", value=False,
+                                help="Markiert Quartalszahlen-Termine: grün 🟢 wenn "
+                                     "die Gewinnerwartung übertroffen wurde, rot 🔴 wenn "
+                                     "verfehlt. Details (Ist/Erwartung/Überraschung) "
+                                     "im Tooltip. Quelle: yfinance, ~letzte 2 Jahre.")
+    show_events = st.checkbox("Markt-Ereignisse", value=False,
+                              help="Markiert ~14 wichtige Ereignisse (Krisen, "
+                                   "Fed-Entscheidungen, Wahlen, Tech-Meilensteine). "
+                                   "Beschreibung erscheint im Tooltip beim Drüberfahren.")
 
     st.divider()
     bench_lbl = st.selectbox("🎯 Benchmark", list(BENCHMARKS.keys()), index=1)
     bench_tkr = BENCHMARKS[bench_lbl]
 
     st.divider()
-    st.subheader("🔄 Vergleichsaktie")
+    st.subheader("📉📈 Vergleichsaktie")
     compare_options = ["Keines"] + [c for c in STOCKS if c != company]
     compare = st.selectbox("Zweite Aktie", compare_options)
     compare_ticker = STOCKS[compare] if compare != "Keines" else None
@@ -488,7 +792,7 @@ with st.sidebar:
 # HEADER & DATEN LADEN
 # ============================================================
 st.title(f"🇺🇸 {company}  ·  `{ticker}`")
-cap = "S&P 100 · Chart · Fundamentals · Bewertung"
+cap = "S&P 100 · Chart · Fundamentals · Bewertung · DCF"
 if compare != "Keines":
     cap += f"  ·  Vergleich mit **{compare}**"
 st.caption(cap)
@@ -506,8 +810,8 @@ df_compare_prices_full = (get_prices(compare_ticker, None)
 # ============================================================
 # TABS
 # ============================================================
-tab1, tab2, tab3, tab5 = st.tabs([
-    "📈 Chart", "📊 Fundamentals", "💎 Bewertung", "🗄️ DB",
+tab1, tab2, tab3, tab4, tab_news, tab5 = st.tabs([
+    "📈 Chart", "📊 Fundamentals", "💰 Bewertung", "🧮 DCF", "📰 News", "🗄️ DB",
 ])
 
 # ---------- TAB 1: CHART ----------
@@ -536,9 +840,24 @@ with tab1:
                    help="Überrendite gegenüber dem Benchmark, bereinigt um Beta "
                         "(annualisiert). Positiv = Outperformance.")
 
+    earnings_data = get_earnings_surprises(ticker) if show_earnings else None
+
+    # Hinweis, falls Ereignisse aktiv sind, aber der Zeitraum keine enthält
+    if show_events:
+        vis_min = pd.Timestamp(df_tech.index.min()).tz_localize(None)
+        vis_max = pd.Timestamp(df_tech.index.max()).tz_localize(None)
+        n_visible = sum(1 for d, _, _ in MARKET_EVENTS
+                        if vis_min <= pd.to_datetime(d).tz_localize(None) <= vis_max)
+        if n_visible == 0:
+            st.info("ℹ️ Im gewählten Zeitraum liegen keine Markt-Ereignisse. "
+                    "Die meisten sind 2020–2024 — wähle einen längeren Zeitraum "
+                    "(z.B. '5 Jahre' oder 'Max'), um sie zu sehen.")
+
     st.plotly_chart(make_main_chart(df_tech, company, smas, show_vol, show_avg_vol,
                                     show_rsi, show_macd, bench=bench_df,
-                                    bench_name=bench_lbl if bench_tkr else None),
+                                    bench_name=bench_lbl if bench_tkr else None,
+                                    earnings=earnings_data,
+                                    events=MARKET_EVENTS if show_events else None),
                     use_container_width=True)
 
     if compare != "Keines":
@@ -680,6 +999,196 @@ with tab3:
                                     use_container_width=True)
         except Exception as e:
             st.error(f"Fehler bei Bewertung: {e}")
+
+# ---------- TAB 4: DCF ----------
+with tab4:
+    fund_a = get_fundamentals(ticker)
+    inputs_a, diag_a = compute_dcf_inputs(fund_a, df_prices_full)
+
+    if inputs_a is None:
+        st.error(f"❌ DCF nicht berechenbar für **{company}**.")
+        for m in diag_a["missing"]:
+            st.write(f"- {m}")
+        st.info("💡 Bei Banken/Versicherern fehlt oft die klassische Debt-Struktur.")
+    else:
+        st.subheader("⚙️ Annahmen")
+        c1, c2 = st.columns(2)
+        with c1:
+            wacc_pct = st.slider("WACC (%)", 5.0, 15.0, 8.5, 0.5,
+                                 help="Weighted Average Cost of Capital — "
+                                      "gewichteter Kapitalkostensatz. Mindestrendite, "
+                                      "die das Unternehmen erwirtschaften muss. "
+                                      "Höhere WACC = niedrigerer Fair Value. "
+                                      "Typisch 7–10 % für Large Caps.")
+            term_g_pct = st.slider("Terminal Growth (%)", 0.5, 4.0, 2.5, 0.25,
+                                   help="Ewiges Wachstum nach der Prognose-Periode. "
+                                        "Sollte unter dem langfristigen BIP-Wachstum "
+                                        "liegen (typisch 2–3 %), sonst überschätzt "
+                                        "das Modell den Unternehmenswert.")
+            n_years = st.slider("Prognose (Jahre)", 3, 10, 5,
+                                help="Wie viele Jahre explizit modelliert werden, "
+                                     "bevor der Terminal Value greift.")
+            wacc = wacc_pct / 100
+            term_g = term_g_pct / 100
+        with c2:
+            d_margin = float(inputs_a["avg_fcf_margin"]) * 100  # in %
+            m_min = min(-10.0, d_margin - 5.0)
+            m_max = max(50.0, d_margin + 10.0)
+            fcf_margin_pct = st.slider("FCF-Margin (%)", m_min, m_max,
+                                       max(m_min, d_margin), 0.5,
+                                       help=f"Free Cash Flow ÷ Umsatz. Anteil "
+                                            f"des Umsatzes, der als freier "
+                                            f"Cashflow bleibt (nach Investitionen). "
+                                            f"Historischer Ø: {d_margin:.1f} %. "
+                                            f"Höher = effizientere Geldgenerierung.")
+            fcf_margin = fcf_margin_pct / 100
+            if fcf_margin <= 0:
+                st.warning("⚠️ FCF-Margin ≤ 0 — bitte manuell anpassen.")
+            g1_pct = st.slider("Wachstum Jahr 1 (%)", -10.0, 30.0, 6.0, 0.5,
+                               help="Erwartetes Umsatzwachstum im ersten "
+                                    "Prognosejahr.")
+            g2_pct = st.slider("Wachstum Jahr 2 (%)", -10.0, 30.0, 8.0, 0.5,
+                               help="Erwartetes Umsatzwachstum im zweiten "
+                                    "Prognosejahr.")
+            g1 = g1_pct / 100
+            g2 = g2_pct / 100
+
+        g3 = (g2 + term_g) / 2
+        g4 = (g3 + term_g) / 2
+        g5 = (g4 + term_g) / 2
+        growth_rates = [g1, g2, g3, g4, g5] + [term_g] * max(0, n_years - 5)
+
+        r_a = run_dcf(inputs_a["rev_current"], growth_rates, fcf_margin,
+                      wacc, term_g, n_years, inputs_a["net_debt"],
+                      inputs_a["shares"], inputs_a["current_price"])
+
+        r_b = inputs_b = None
+        if compare != "Keines":
+            fund_b = get_fundamentals(compare_ticker)
+            inputs_b, diag_b = compute_dcf_inputs(fund_b, df_compare_prices_full)
+            if inputs_b is None:
+                st.warning(f"⚠️ DCF-Vergleich mit **{compare}** nicht möglich: "
+                           f"{', '.join(diag_b['missing'])}")
+            else:
+                m_b = max(0.0, float(inputs_b["avg_fcf_margin"]))
+                r_b = run_dcf(inputs_b["rev_current"], growth_rates, m_b,
+                              wacc, term_g, n_years, inputs_b["net_debt"],
+                              inputs_b["shares"], inputs_b["current_price"])
+
+        st.divider()
+        st.subheader("💰 Bewertungsergebnis")
+        if r_b is None:
+            cols = st.columns(4)
+            cols[0].metric("Fair Value",   f"${r_a['fv']:,.2f}")
+            cols[1].metric("Marktpreis",   f"${inputs_a['current_price']:,.2f}")
+            cols[2].metric("Upside",       f"{r_a['upside']:+.1f} %")
+            cols[3].metric("Enterprise V.", f"${r_a['ev']/1e9:.0f} Mrd.")
+        else:
+            ca, cb = st.columns(2)
+            for col, name, r, inp, marg in [
+                (ca, company, r_a, inputs_a, fcf_margin),
+                (cb, compare, r_b, inputs_b, max(0.0, inputs_b["avg_fcf_margin"]))]:
+                with col:
+                    st.markdown(f"### {name}")
+                    m = st.columns(3)
+                    m[0].metric("Fair Value", f"${r['fv']:,.2f}")
+                    m[1].metric("Marktpreis", f"${inp['current_price']:,.2f}")
+                    m[2].metric("Upside",     f"{r['upside']:+.1f} %")
+                    st.caption(f"FCF-Margin: {marg:.1%}")
+
+        with st.expander(f"📋 Berechnung im Detail · {company}"):
+            st.markdown(f"""
+            | Position | Wert (Mrd. USD) |
+            |---|---:|
+            | Summe PV der FCFs (Jahre 1-{n_years}) | {r_a['sum_pv']/1e9:.1f} |
+            | + Barwert Terminal Value | {r_a['pv_tv']/1e9:.1f} |
+            | **= Enterprise Value** | **{r_a['ev']/1e9:.1f}** |
+            | - Net Debt | {inputs_a['net_debt']/1e9:.1f} |
+            | **= Equity Value** | **{r_a['equity']/1e9:.1f}** |
+            | ÷ Aktien (Diluted, Mrd.) | {inputs_a['shares']/1e9:.2f} |
+            | **= Fair Value pro Aktie** | **${r_a['fv']:.2f}** |
+            """)
+
+        ca, cb = st.columns(2)
+        with ca:
+            yrs = list(range(1, n_years + 1))
+            fig_proj = go.Figure()
+            fig_proj.add_trace(go.Bar(x=yrs, y=r_a["proj"]["FCF"] / 1e9,
+                                      name="FCF nominal",
+                                      marker_color="steelblue", opacity=0.7))
+            fig_proj.add_trace(go.Bar(x=yrs, y=r_a["proj"]["PV_FCF"] / 1e9,
+                                      name="PV (diskontiert)",
+                                      marker_color="darkblue"))
+            fig_proj.update_layout(title=f"FCF-Projektion · {company}",
+                                   template="plotly_white", height=380,
+                                   xaxis_title="Jahr", yaxis_title="Mrd. USD",
+                                   barmode="group",
+                                   margin=dict(l=40, r=40, t=40, b=40))
+            st.plotly_chart(fig_proj, use_container_width=True)
+        with cb:
+            if r_b is None:
+                color = "#26a69a" if r_a["fv"] > inputs_a["current_price"] else "#ef5350"
+                fig_fv = go.Figure(go.Bar(
+                    x=["Fair Value", "Marktkurs"],
+                    y=[r_a["fv"], inputs_a["current_price"]],
+                    marker_color=[color, "gray"],
+                    text=[f"${r_a['fv']:.2f}", f"${inputs_a['current_price']:.2f}"],
+                    textposition="outside"))
+                fig_fv.update_layout(title=f"DCF vs. Markt · {company} ({r_a['upside']:+.1f}%)",
+                                     template="plotly_white", height=380,
+                                     yaxis_title="USD pro Aktie",
+                                     margin=dict(l=40, r=40, t=40, b=40),
+                                     showlegend=False)
+                st.plotly_chart(fig_fv, use_container_width=True)
+            else:
+                ups = [r_a["upside"], r_b["upside"]]
+                fig_cmp = go.Figure(go.Bar(
+                    x=[company, compare], y=ups,
+                    marker_color=["#26a69a" if u > 0 else "#ef5350" for u in ups],
+                    text=[f"{u:+.1f}%" for u in ups],
+                    textposition="outside"))
+                fig_cmp.update_layout(title="Upside-Vergleich",
+                                      template="plotly_white", height=380,
+                                      yaxis_title="Upside (%)",
+                                      margin=dict(l=40, r=40, t=40, b=40),
+                                      showlegend=False)
+                st.plotly_chart(fig_cmp, use_container_width=True)
+
+# ---------- TAB NEWS ----------
+with tab_news:
+    st.subheader(f"📰 Aktuelle News · {company}")
+
+    if not _YF_AVAILABLE:
+        st.warning("⚠️ yfinance ist nicht installiert — News können nicht geladen "
+                   "werden. Installiere es mit `pip install yfinance`.")
+    else:
+        with st.spinner("Lade aktuelle Nachrichten..."):
+            news = get_company_news(ticker, limit=15)
+
+        if not news:
+            st.info(f"ℹ️ Aktuell keine News für **{company}** ({ticker}) verfügbar. "
+                    "yfinance liefert nur aktuelle Schlagzeilen — manchmal sind für "
+                    "einzelne Aktien gerade keine abrufbar. Versuche es später erneut "
+                    "oder wähle eine andere Aktie.")
+        else:
+            st.caption(f"{len(news)} aktuelle Meldungen · Quelle: yfinance / Yahoo Finance")
+            st.divider()
+            for art in news:
+                # Zeitstempel formatieren
+                if art["timestamp"] is not None:
+                    ts_str = art["timestamp"].strftime("%d.%m.%Y %H:%M")
+                else:
+                    ts_str = ""
+                # Titel als Link (falls vorhanden)
+                if art["link"]:
+                    st.markdown(f"#### [{art['title']}]({art['link']})")
+                else:
+                    st.markdown(f"#### {art['title']}")
+                # Meta-Zeile: Publisher + Zeit
+                meta = " · ".join([x for x in [art["publisher"], ts_str] if x])
+                if meta:
+                    st.caption(meta)
+                st.divider()
 
 # ---------- TAB 5: DATENBANK ----------
 with tab5:
