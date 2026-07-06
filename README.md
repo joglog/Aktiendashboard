@@ -99,7 +99,7 @@ fund = db.get_fundamentals(ticker)
   Daten noch aktuell sind (Kursdaten: 1 Tag, Fundamentaldaten: 7 Tage) und lädt nur bei
   Bedarf nach
 
-### Das Hauptproblem: yfinance-Rate-Limits
+**Das Hauptproblem: yfinance-Rate-Limits**
 
 - yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
 - Yahoo blockiert bei zu vielen Anfragen
@@ -107,7 +107,7 @@ fund = db.get_fundamentals(ticker)
 
 ---
 
-### Schutz 1 — Throttling (Pause zwischen Anfragen)
+**Schutz 1 — Throttling (Pause zwischen Anfragen)**
 
 ```python
 YF_THROTTLE_SECONDS = 2.0   # Pause zwischen yfinance-Calls
@@ -123,9 +123,8 @@ def _throttle_yf(cls):
 - Wenn weniger als 2 Sekunden vergangen sind → automatisch warten
 - So werden zu viele Anfragen auf einmal verhindert
 
----
 
-### Schutz 2 — Fallback yfinance ↔ SimFin
+**Schutz 2 — Fallback yfinance ↔ SimFin**
 
 ```python
 def refresh_prices(self, ticker: str, force: bool = False) -> bool:
@@ -140,9 +139,8 @@ def refresh_prices(self, ticker: str, force: bool = False) -> bool:
 - **Wenn das fehlschlägt** → automatisch auf SimFin ausweichen
 - SimFin hat zwar kürzere Historie (~5 Jahre), aber keine Rate-Limits
 
----
 
-### Schutz 3 — TTL-Logik (Daten nur nachladen, wenn veraltet)
+**Schutz 3 — TTL-Logik (Daten nur nachladen, wenn veraltet)**
 
 ```python
 PRICE_TTL_DAYS = 1          # Preise täglich aktualisieren
@@ -166,7 +164,7 @@ Datenbank als eine **einzige SQLite-Datei**
 
 ---
 
-### Sechs Tabellen im Schema
+**Sechs Tabellen im Schema**
 
 | Tabelle | Inhalt | Frequenz |
 |---|---|---|
@@ -177,9 +175,8 @@ Datenbank als eine **einzige SQLite-Datei**
 | `metrics_ttm` | vorberechnete Trailing-Twelve-Months-Kennzahlen | abgeleitet |
 | `update_log` | welche Aktie wann aus welcher Quelle geladen wurde | bei jedem Update |
 
----
 
-### automatische Anlegung von Tabellen
+**automatische Anlegung von Tabellen**
 
 ```python
 def _init_schema(self):
@@ -198,9 +195,8 @@ def _init_schema(self):
 - `CREATE TABLE IF NOT EXISTS` → wird nur angelegt, falls noch nicht da
 - **Primärschlüssel** `(ticker, date)` → keine Doppelungen möglich
 
----
 
-### Indizes 
+**Indizes** 
 
 ```python
 cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker)")
