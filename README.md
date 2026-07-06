@@ -56,10 +56,10 @@ jede Schicht mit klaren Aufgaben
           │  (Daten- Layer)  │                                 │
           └──────────────────┘                                 │
               │            │                                   │
-              │            │                                   │  direkt,
-              │            │                                   │  ohne
-              │   ┌──────────────────┐                         │  Daten-
-              │   │  market_data.db  │                         │  Layer
+              │            │                                   │  
+              │            │                                   │  
+              │   ┌──────────────────┐                         │  
+              │   │  market_data.db  │                         │  
               │   │ (SQLite-Speicher)│                         │                           
               │   └──────────────────┘                         │
               │                                                │
