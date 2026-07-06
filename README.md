@@ -29,23 +29,23 @@ Datenbank.
 ```
    yfinance (Kurse)     SimFin (Fundamentaldaten)      yfinance (News, Earnings)
           └────────┬────────────┘                              │
+                   │ lädt & speichert                          │
                    ▼                                           │
           ┌──────────────────┐                                 │
           │   database.py    │  (Daten-Layer)                  │
           │  laden · putzen  │                                 │
           └──────────────────┘                                 │
-                   ▲ │                                          │
-    liest/schreibt │ │                                         │  direkt,
-                   │ ▼                                          │  ohne
-          ┌──────────────────┐                                 │  Datenbank
-          │  market_data.db  │  (SQLite-Speicher)              │
-          └──────────────────┘                                 │
-                   ▲                                            │
-                   │  from database import DB                   │
-                   │  db.get_prices() / db.get_fundamentals()   │
-                   │                                            │
+              ▲            │                                    │
+   ruft auf:  │            │ liest / schreibt                  │  direkt,
+   db.get_    │            ▼                                   │  ohne
+   prices()   │   ┌──────────────────┐                         │  Daten-
+              │   │  market_data.db  │  (SQLite-Speicher)      │  Layer
+              │   └──────────────────┘                         │
+              │                                                │
           ┌──────────────────┐                                 │
           │   Dashboard.py   │  (Streamlit-Oberfläche)  ◄───────┘
+          │  from database   │
+          │  import DB       │
           └──────────────────┘
                    ▼
                 Browser
