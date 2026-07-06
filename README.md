@@ -51,12 +51,11 @@ jede Schicht mit klaren Aufgaben
 ```
 
 **Wie die Verbindung funktioniert:** 
-- Das Dashboard importiert die Datenbank-Klasse
-mit `from database import DB` und ruft dann `db.get_prices()` bzw.
-`db.get_fundamentals()` auf. Der Daten-Layer (`database.py`) liest daraufhin aus der
-`market_data.db` — oder lädt frische Daten aus dem Internet nach und schreibt sie in
-die Datenbank. Das Dashboard spricht also **nie direkt** mit der Datenbank-Datei,
-sondern immer über den Daten-Layer.
+- Dashboard imoportiert die Datenbank- Klasse mit `from database import DB`
+  → ruft anschließend z.B. `db.get_prices()` bzw. `db.get_fundamentals()` auf
+- Daten-Layer (`database.py`) liest die Daten aus der Datenbank (`market_data.db`) oder lädt diese neu (Kursdaten für 1 Tag und Fundamentaldaten für 7 tage frisch)
+- Dashboard nur **indirekte** Verbindung zur Datenbank
+
 
 **Funktionen der Schichten:**
 
@@ -66,50 +65,104 @@ sondern immer über den Daten-Layer.
 
 **Zwei Datenwege:**
 
-- Kurse und Fundamentaldaten laufen über die Datenbank — dauerhaft gespeichert,
+- Kursdaten und Fundamentaldaten laufen über die Datenbank: dort werden sie dauerhaft gespeichert und 
   nur bei Bedarf nachgeladen
-- News und Earnings-Überraschungen holt das Dashboard direkt von yfinance —
-  sie sind flüchtig und werden nur kurz im Arbeitsspeicher gehalten
+- News und Earnings holt das Dashboard direkt von yfinance: werden nur kurz im Arbeitsspeicher gehalten
+
 
 ---
 
 ## Datenlayer (`database.py`)
 
-Der Datenlayer ist die zentrale Schnittstelle zwischen den externen Datenquellen
-und der lokalen Datenbank. Das Dashboard kommuniziert für Kurse und Fundamentaldaten
-ausschließlich mit dieser Schicht und weiß nichts davon, woher die Daten
-ursprünglich kommen.
+**zentrale Schnittstelle**:
+- zwischen externen Datenquellen und lokaler Datenbank
+- Dashboard kommuniziert für Kurs- und Fundamentaldaten ausschließlich mit Datenlayer
 
-So ist der Datenlayer mit Datenbank und Dashboard verbunden:
+Verbindung des Datenlayers mit Datenbank und Dashboard:
 
 ```python
-# In Dashboard.py — die einzige Verbindung zum Datenlayer:
+#In Dashboard.py → Verbindung zum Datenlayer über die Klasse DB (von dort aus dann zur Datenbank):
 from database import DB
 
 @st.cache_resource
 def get_db():
-    return DB()          # öffnet market_data.db, legt Tabellen bei Bedarf an
+    return DB()          #Verbindung zu Datenbank über Datenlayer wird nur einmal aufgebaut
 db = get_db()
 
-# Alle Kurs- und Fundamentaldaten-Abfragen laufen dann über:
+#Abrufen der Kurs- und Fundamentaldaten über den Datenlayer:
 df = db.get_prices(ticker)
 fund = db.get_fundamentals(ticker)
 ```
 
-- die Klasse `DB` bündelt alle Datenbank-Operationen
-- `get_prices()` / `get_fundamentals()` prüfen automatisch, ob die gespeicherten
-  Daten noch aktuell sind (Kurse: 1 Tag, Fundamentals: 7 Tage) und laden nur bei
+- Klasse `DB` bündelt alle Datenbank-Operationen
+- `get_prices()` / `get_fundamentals()` : Datenlayer besorgt die Daten und prüft dabei automatisch, ob die gespeicherten
+  Daten noch aktuell sind (Kursdaten: 1 Tag, Fundamentaldaten: 7 Tage) und lädt nur bei
   Bedarf nach
-- gegen die Rate-Limits von yfinance gibt es drei Schutzmechanismen: gedrosselte
-  Anfragen (2 Sekunden Pause), automatischer Fallback auf SimFin, und die
-  TTL-Logik, die unnötige Anfragen von vornherein vermeidet
+
+### Das Hauptproblem: yfinance-Rate-Limits
+
+- yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
+- Yahoo blockiert bei zu vielen Anfragen
+- Dagegen gibt es folgende Schutzmechanismen:
+
+---
+
+### Schutz 1 — Throttling (Pause zwischen Anfragen)
+
+```python
+YF_THROTTLE_SECONDS = 2.0   # Pause zwischen yfinance-Calls
+
+@classmethod
+def _throttle_yf(cls):
+    elapsed = time.time() - cls._last_yf_call
+    if elapsed < YF_THROTTLE_SECONDS:
+        time.sleep(YF_THROTTLE_SECONDS - elapsed)
+```
+
+- Wann war der letzte Aufruf?
+- Wenn weniger als 2 Sekunden vergangen sind → automatisch warten
+- So werden zu viele Anfragen auf einmal verhindert
+
+---
+
+### Schutz 2 — Fallback yfinance ↔ SimFin
+
+```python
+def refresh_prices(self, ticker: str, force: bool = False) -> bool:
+    ...
+    df = self._fetch_prices_yf(ticker)        # 1. Versuch: yfinance
+    if df is None or df.empty:
+        df = self._fetch_prices_simfin(ticker)  # 2. Versuch: SimFin
+    ...
+```
+
+- **Erst yfinance versuchen** (lange Historie, oft 20+ Jahre)
+- **Wenn das fehlschlägt** → automatisch auf SimFin ausweichen
+- SimFin hat zwar kürzere Historie (~5 Jahre), aber keine Rate-Limits
+
+---
+
+### Schutz 3 — TTL-Logik (Daten nur nachladen, wenn veraltet)
+
+```python
+PRICE_TTL_DAYS = 1          # Preise täglich aktualisieren
+FUNDAMENTALS_TTL_DAYS = 7   # Fundamentals wöchentlich
+```
+
+- **TTL** = "Time To Live", also: Wie lange gelten Daten als frisch?
+- Kursdaten: 1 Tag
+- Fundamentaldaten: 7 Tage
+- Bei jeder Anfrage prüft `_needs_refresh()`: Sind die Daten noch frisch genug?
+     - Wenn ja → direkt aus der DB lesen 
+     - Wenn nein → frisch laden 
+
 
 ---
 
 ## Datenbank (`market_data.db`)
 
-Die Datenbank ist eine **einzige SQLite-Datei** im Projektordner. Sie wird beim
-ersten Start automatisch erzeugt — manuelles Anlegen ist nicht nötig.
+Datenbank als eine **einzige SQLite-Datei** 
+→ wurde beim ersten Start automatisch erzeugt
 
 ---
 
@@ -122,11 +175,11 @@ ersten Start automatisch erzeugt — manuelles Anlegen ist nicht nötig.
 | `balance` | Bilanz (Aktiva, Passiva, Eigenkapital, Schulden) | quartalsweise |
 | `cashflow` | Kapitalflussrechnung (operativer Cashflow, CapEx, …) | quartalsweise |
 | `metrics_ttm` | vorberechnete Trailing-Twelve-Months-Kennzahlen | abgeleitet |
-| `update_log` | Protokoll: welche Aktie wann aus welcher Quelle geladen | bei jedem Update |
+| `update_log` | welche Aktie wann aus welcher Quelle geladen wurde | bei jedem Update |
 
 ---
 
-### Tabellen werden automatisch angelegt
+### automatische Anlegung von Tabellen
 
 ```python
 def _init_schema(self):
@@ -147,17 +200,18 @@ def _init_schema(self):
 
 ---
 
-### Indizes für Geschwindigkeit
+### Indizes 
 
 ```python
 cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker)")
 cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date)")
 ```
 
-- Indizes sind wie ein "Inhaltsverzeichnis" für die Datenbank
-- Abfragen werden durch Indizes deutlich schneller gelöst
+- Indizes als "Inhaltsverzeichnis" für die Datenbank
+- Abfragen durch Indizes deutlich schneller 
 
 ---
+
 
 ## Dashboard (`Dashboard.py`)
 
