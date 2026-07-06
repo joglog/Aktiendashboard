@@ -107,7 +107,7 @@ from database import DB
 
 @st.cache_resource
 def get_db():
-    return DB()          # Verbindung zu Datenbank über Datenlayer wird nur einmal aufgebaut
+    return DB()          # Verbindung zu Datenbank über Datenlayer wird über Cache nur einmal aufgebaut
 db = get_db()
 
 # Abrufen der Kurs- und Fundamentaldaten über den Datenlayer:
