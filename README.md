@@ -161,20 +161,19 @@ cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date)")
 
 ## Dashboard (`Dashboard.py`)
 
-Das Dashboard ist die Benutzeroberfläche, die im Browser läuft. Gebaut mit
-Streamlit — einem Python-Framework, mit dem man interaktive Web-Apps schreiben
-kann, ohne HTML oder JavaScript zu programmieren. Es braucht nur reinen
-Python-Code.
+- Dashboard ist die Benutzeroberfläche, die im Browser läuft
+- über Streamlit braucht es keinen HTML oder JavaScript sondern nur einen Python-Code
+
 
 ---
 
-### Wie Streamlit tickt — und warum Caching nötig ist
+### Caching
 
-- das Skript wird **bei jeder Interaktion komplett neu ausgeführt**
+- Skript wird bei jeder Interaktion komplett neu ausgeführt
 - damit das schnell bleibt, gibt es Caching auf zwei Ebenen:
-  - die DB-Verbindung wird mit `@st.cache_resource` nur einmal geöffnet
+  - die **DB-Verbindung** wird mit `@st.cache_resource` nur einmal geöffnet
   - Datenabfragen sind mit `@st.cache_data` versehen — Ergebnisse bleiben eine
-    Stunde im Arbeitsspeicher und werden bei erneutem Aufruf sofort zurückgegeben
+    Stunde im **Arbeitsspeicher** und werden bei erneutem Aufruf sofort zurückgegeben
 
 ---
 
@@ -187,11 +186,10 @@ with st.sidebar:
     ticker = STOCKS[company]
 ```
 
-- `with st.sidebar:` öffnet einen Block → alles eingerückt darunter landet in der Seitenleiste
-- `st.selectbox` ist das Dropdown — **gibt direkt den ausgewählten Wert zurück**
-- `ticker = STOCKS[company]` übersetzt Anzeigename → Börsenkürzel
+- `with st.sidebar:` alles darunter eingerückte darunter landet in der Seitenleiste
+- `st.selectbox` gibt im Dropdown direkt den ausgewählten Wert zurück
+- `ticker = STOCKS[company]` übersetzt Anzeigename in das zugehörige Börsenkürzel
   - Apple → AAPL, Microsoft → MSFT
-  - weil die Datenbank mit Kürzeln arbeitet
 
 ---
 
@@ -205,11 +203,11 @@ tab1, tab2, tab3, tab4, tab_news, tab5 = st.tabs([
 
 | Tab | Inhalt |
 |---|---|
-| **Chart** | Candlestick-Kurschart mit zuschaltbaren Indikatoren plus Performance-Kennzahlen und Ereignis-Markern |
+| **Chart** | Candlestick-Kurschart mit einblendbaren Indikatoren und Earnings-/Ereignismarkern plus Performance-Kennzahlen |
 | **Fundamentals** | Quartalsweise Darstellung von Umsatz, Gewinn, EPS und Nettomarge |
-| **Bewertung** | Historische Zeitreihen von KGV und KBV inkl. Durchschnittslinien |
-| **DCF** | Discounted-Cash-Flow-Bewertung: fairer Wert je Aktie mit einstellbaren Annahmen |
-| **News** | Aktuelle Schlagzeilen zur gewählten Aktie |
+| **Bewertung** | Historische Zeitreihen von Kurs-Gewinn-Verhältnis und Kurs-Buchwert-Verhältnis inkl. Durchschnittslinien |
+| **DCF** | Berechnung eines fairen Wertes je Aktie durch ein Discounted-Cashflow-Modell |
+| **News** | 10 aktuelle News zur gewählten Aktie |
 | **DB** | Datenbank-Status, manuelles Nachladen einzelner oder aller Aktien |
 
 ---
@@ -222,7 +220,7 @@ tab1, tab2, tab3, tab4, tab_news, tab5 = st.tabs([
   gegenüber den Verlust-Tagen der letzten 14 Tage. Über 70 überkauft, unter 30 überverkauft.
 - **MACD:** Differenz zweier exponentieller Durchschnitte (12/26 Tage). Kreuzt die
   MACD-Linie ihre Signal-Linie nach oben, gilt das als Kaufsignal.
-- **Volumen:** gehandelte Stückzahl pro Tag, optional gibt es auch einen 20-Tage-Durchschnitt.
+- **Volumen:** gehandelte Stückzahl pro Tag, optional mit 20-Tage-Durchschnitt.
 
 Performance-Kennzahlen oberhalb des Charts:
 
