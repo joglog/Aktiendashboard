@@ -99,13 +99,14 @@ fund = db.get_fundamentals(ticker)
   Daten noch aktuell sind (Kursdaten: 1 Tag, Fundamentaldaten: 7 Tage) und lädt nur bei
   Bedarf nach
 
+ --- 
+
 **Das Hauptproblem: yfinance-Rate-Limits**
 
 - yfinance ist eine **inoffizielle** Schnittstelle zu Yahoo Finance
 - Yahoo blockiert bei zu vielen Anfragen
 - Dagegen gibt es folgende Schutzmechanismen:
 
----
 
 **Schutz 1 — Throttling (Pause zwischen Anfragen)**
 
