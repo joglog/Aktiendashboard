@@ -72,7 +72,7 @@ jede Schicht mit klaren Aufgaben
 
 ---
 
-## Datenlayer (`database.py`)
+## a) Datenlayer (`database.py`)
 
 **zentrale Schnittstelle**:
 - zwischen externen Datenquellen und lokaler Datenbank
@@ -158,7 +158,7 @@ FUNDAMENTALS_TTL_DAYS = 7   # Fundamentals wöchentlich
 
 ---
 
-## Datenbank (`market_data.db`)
+## b) Datenbank (`market_data.db`)
 
 Datenbank als eine **einzige SQLite-Datei** 
 → wurde beim ersten Start automatisch erzeugt
@@ -210,7 +210,7 @@ cur.execute("CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date)")
 ---
 
 
-## Dashboard (`Dashboard.py`)
+## c) Dashboard (`Dashboard.py`)
 
 - Dashboard ist die Benutzeroberfläche, die im Browser läuft
 - über Streamlit braucht es keinen HTML oder JavaScript sondern nur einen Python-Code
