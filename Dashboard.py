@@ -1044,10 +1044,10 @@ with tab4:
             fcf_margin = fcf_margin_pct / 100
             if fcf_margin <= 0:
                 st.warning("⚠️ FCF-Margin ≤ 0 — bitte manuell anpassen.")
-            g1_pct = st.slider("Wachstum Jahr 1 (%)", -10.0, 30.0, 6.0, 0.5,
+            g1_pct = st.slider("Wachstum Jahr 1 (%)", -10.0, 30.0, 7.0, 0.5,
                                help="Erwartetes Umsatzwachstum im ersten "
                                     "Prognosejahr.")
-            g2_pct = st.slider("Wachstum Jahr 2 (%)", -10.0, 30.0, 8.0, 0.5,
+            g2_pct = st.slider("Wachstum Jahr 2 (%)", -10.0, 30.0, 6.0, 0.5,
                                help="Erwartetes Umsatzwachstum im zweiten "
                                     "Prognosejahr.")
             g1 = g1_pct / 100
