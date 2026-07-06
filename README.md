@@ -6,6 +6,27 @@ Fundamentaldaten, Bewertungskennzahlen, eine DCF-Unternehmensbewertung und aktue
 News - sowie mit einer lokaler Datenbank als Zwischenspeicher.
 
 ---
+##  Installation & Start
+
+### 1. Repository klonen
+
+```bash
+git clone https://github.com/<joglog>/<Dashboard>.git
+cd <joglog/dashboard>
+```
+
+### 2. Abhängigkeiten installieren
+
+```bash
+pip install streamlit pandas numpy plotly simfin yfinance
+```
+
+### 3. Dashboard starten
+
+```bash
+streamlit run Dashboard.py
+```
+---
 
 ## Tech-Stack
 
