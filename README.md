@@ -72,7 +72,7 @@ jede Schicht mit klaren Aufgaben
 ```
 
 **Wie die Verbindung funktioniert:** 
-- Dashboard imoportiert die Datenbank- Klasse mit `from database import DB`
+- Dashboard importiert die Datenbank- Klasse mit `from database import DB`
   → ruft anschließend z.B. `db.get_prices()` bzw. `db.get_fundamentals()` auf
 - Daten-Layer (`database.py`) liest die Daten aus der Datenbank (`market_data.db`) oder lädt diese neu (Kursdaten für 1 Tag und Fundamentaldaten für 7 tage frisch)
 - Dashboard nur **indirekte** Verbindung zur Datenbank
